@@ -1,0 +1,12 @@
+include README.md LICENSE CONTRIBUTING.md SECURITY.md THIRD_PARTY_NOTICES.md
+recursive-include docs *.md *.png
+recursive-include schema *.json
+recursive-include fixtures *.json *.jsonl
+recursive-include examples *.py
+recursive-include benchmarks *.py
+recursive-include tests *.py *.mjs
+include viewer/package.json viewer/package-lock.json viewer/tsconfig.json viewer/vite.config.ts viewer/index.html
+recursive-include viewer/src *.ts *.tsx *.css
+recursive-include viewer/scripts *.ts *.mjs
+recursive-include src/agent_flight_recorder/static *
+global-exclude __pycache__ *.py[cod] .DS_Store

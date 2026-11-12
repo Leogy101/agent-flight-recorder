@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-flight-recorder:event:0.1",
+  "title": "Agent Flight Recorder event 0.1",
+  "description": "One JSONL record. File bounds, causality, lifecycle and cross-record semantics require consumer validation.",
+  "type": "object",
+  "required": ["schema_version", "recording_id", "trace_id", "event_id", "seq", "type", "recorded_at", "data"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "recording_id": {"type": "string", "format": "uuid"},
+    "trace_id": {"type": "string", "pattern": "^(?!0{32}$)[0-9a-f]{32}$"},
+    "event_id": {"type": "string", "format": "uuid"},
+    "seq": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "type": {"enum": ["capture.started", "span.started", "span.ended", "event.recorded", "capture.ended"]},
+    "recorded_at": {"$ref": "#/$defs/time"},
+    "source_time": {"$ref": "#/$defs/time"},
+    "elapsed_us": {"$ref": "#/$defs/count"},
+    "span_id": {"$ref": "#/$defs/spanId"},
+    "parent_span_id": {"$ref": "#/$defs/spanId"},
+    "data": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"type": {"const": "capture.started"}}},
+      "then": {"properties": {"data": {"$ref": "#/$defs/captureStart"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "span.started"}}},
+      "then": {"required": ["span_id"], "properties": {"data": {"$ref": "#/$defs/spanStart"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "span.ended"}}},
+      "then": {"required": ["span_id"], "properties": {"data": {"$ref": "#/$defs/spanEnd"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "event.recorded"}}},
+      "then": {"properties": {"data": {"type": "object", "required": ["name", "payload"], "properties": {"name": {"$ref": "#/$defs/label"}, "payload": {"$ref": "#/$defs/payload"}}}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "capture.ended"}}},
+      "then": {"properties": {"data": {"$ref": "#/$defs/captureEnd"}}}
+    }
+  ],
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "label": {"type": "string", "maxLength": 256},
+    "spanId": {"type": "string", "pattern": "^(?!0{16}$)[0-9a-f]{16}$"},
+    "time": {"type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"},
+    "payload": {
+      "type": "object", "required": ["state"],
+      "properties": {
+        "state": {"enum": ["captured", "omitted", "redacted", "unavailable"]},
+        "value": {}, "reason": {"$ref": "#/$defs/label"},
+        "truncated": {"type": "boolean"}, "redacted_fields": {"$ref": "#/$defs/count"}
+      },
+      "allOf": [{"if": {"properties": {"state": {"const": "captured"}}}, "then": {"required": ["value"]}, "else": {"not": {"required": ["value"]}}}]
+    },
+    "attributes": {
+      "type": "object",
+      "properties": {
+        "provider": {"$ref": "#/$defs/label"}, "model": {"$ref": "#/$defs/label"},
+        "tool_name": {"$ref": "#/$defs/label"}, "tool_call_id": {"$ref": "#/$defs/label"},
+        "retry_of": {"$ref": "#/$defs/spanId"}, "attempt": {"$ref": "#/$defs/count"},
+        "otel_span_kind": {"$ref": "#/$defs/label"}
+      },
+      "additionalProperties": false
+    },
+    "captureStart": {
+      "type": "object", "required": ["recorder_version", "capture_mode", "privacy_mode", "coverage", "limits"],
+      "properties": {
+        "recorder_version": {"$ref": "#/$defs/label"},
+        "capture_mode": {"enum": ["native_lifecycle", "imported_completed_spans"]},
+        "privacy_mode": {"enum": ["metadata_only", "selected_content"]},
+        "coverage": {"type": "string", "maxLength": 256},
+        "source": {"type": "object", "properties": {"name": {"$ref": "#/$defs/label"}, "version": {"$ref": "#/$defs/label"}}},
+        "limits": {
+          "type": "object", "required": ["max_file_bytes", "max_events", "max_event_bytes", "max_payload_bytes", "max_depth"],
+          "properties": {
+            "max_file_bytes": {"type": "integer", "minimum": 1, "maximum": 26214400},
+            "max_events": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "max_event_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+            "max_payload_bytes": {"type": "integer", "minimum": 1, "maximum": 8192},
+            "max_depth": {"type": "integer", "minimum": 1, "maximum": 20}
+          }
+        },
+        "transform": {"type": "object", "required": ["kind", "version", "source_issues"], "properties": {"kind": {"const": "reduced_share"}, "version": {"const": "0.1"}, "source_issues": {"type": "array", "items": {"$ref": "#/$defs/label"}}}}
+      }
+    },
+    "spanStart": {
+      "type": "object", "required": ["kind", "name", "input"],
+      "properties": {
+        "kind": {"enum": ["run", "agent", "model", "tool", "retrieval", "step"]},
+        "name": {"$ref": "#/$defs/label"}, "input": {"$ref": "#/$defs/payload"},
+        "attributes": {"$ref": "#/$defs/attributes"}, "reconstructed": {"type": "boolean"},
+        "links": {"type": "array", "maxItems": 64, "items": {"type": "object", "required": ["span_id", "relation"], "properties": {"span_id": {"$ref": "#/$defs/spanId"}, "relation": {"enum": ["retry_of", "follows_from"]}}}}
+      }
+    },
+    "spanEnd": {
+      "type": "object", "required": ["status", "output"],
+      "properties": {
+        "status": {"enum": ["ok", "error", "cancelled", "unknown"]},
+        "output": {"$ref": "#/$defs/payload"}, "reconstructed": {"type": "boolean"},
+        "usage": {"type": "object", "properties": {"input_tokens": {"$ref": "#/$defs/count"}, "output_tokens": {"$ref": "#/$defs/count"}}},
+        "error": {"type": "object", "required": ["type"], "properties": {"type": {"$ref": "#/$defs/label"}, "code": {"$ref": "#/$defs/label"}}}
+      }
+    },
+    "captureEnd": {
+      "type": "object", "required": ["written_events", "skipped_events", "failed_events", "limit_reached"],
+      "properties": {"written_events": {"$ref": "#/$defs/count"}, "skipped_events": {"$ref": "#/$defs/count"}, "failed_events": {"$ref": "#/$defs/count"}, "limit_reached": {"type": "boolean"}}
+    }
+  }
+}

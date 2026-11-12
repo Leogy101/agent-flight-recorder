@@ -1,0 +1,21 @@
+# Recordings may contain sensitive content. Commit only reviewed synthetic fixtures.
+*.jsonl
+!fixtures/*.jsonl
+!src/agent_flight_recorder/static/demo-*.jsonl
+.env
+.env.*
+!.env.example
+recordings/
+work/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+.DS_Store
