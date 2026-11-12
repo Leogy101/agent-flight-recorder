@@ -127,6 +127,67 @@ describe('bounded recording import', () => {
 });
 
 describe('recorded playback and reduced sharing', () => {
+  it('does not reveal a later conflict before its recorded playback position', () => {
+    const events = makeEvents();
+    const conflicting = structuredClone(events[6]);
+    conflicting.event_id = crypto.randomUUID(); conflicting.seq = 9; conflicting.data.status = 'ok';
+    events.push(conflicting);
+    const recording = parseRecording(jsonl(events));
+    expect(buildView(recording, 1).spans[0].status).toBe('incomplete');
+    expect(buildView(recording, 1).outcome).toBe('Unfinished');
+    expect(buildView(recording).outcome).toBe('Conflicting');
+  });
+  it('compares JSON evidence without treating object-key ordering as a conflict', () => {
+    const events = makeEvents();
+    const original = events[2];
+    const reordered = Object.fromEntries(Object.entries(original).reverse());
+    reordered.data = Object.fromEntries(Object.entries(original.data).reverse());
+    events.splice(3, 0, reordered as typeof original);
+    const recording = parseRecording(jsonl(events));
+    expect(recording.warnings.some(w => w.code === 'duplicate_event')).toBe(true);
+    expect(recording.warnings.some(w => w.code === 'conflicting_duplicate')).toBe(false);
+    expect(recording.needsAcknowledgement).toBe(false);
+  });
+  it('keeps boolean and numeric evidence distinct while treating 1 and 1.0 equally', () => {
+    const events = makeEvents(); events[2].data.input = { state: 'captured', value: true };
+    const other = structuredClone(events[2]); other.data.input.value = 1; events.splice(3, 0, other);
+    expect(parseRecording(jsonl(events)).warnings.some(w => w.code === 'conflicting_duplicate')).toBe(true);
+    events[2].data.input.value = 1;
+    expect(parseRecording(jsonl(events).replace('"value":1', '"value":1.0')).warnings.some(w => w.code === 'conflicting_duplicate')).toBe(false);
+  });
+  it('retains transformed conflict warnings at full view without inventing an earlier playback outcome', () => {
+    const events = makeEvents();
+    events[0].data.transform = { kind: 'reduced_share', version: '0.1', source_issues: ['conflicting_span_end'] };
+    const recording = parseRecording(jsonl(events));
+    expect(buildView(recording, 1).outcome).toBe('Unfinished');
+    expect(buildView(recording).outcome).toBe('Conflicting');
+  });
+  it('does not silently skip blank physical records or miscount deduplicated events', () => {
+    const lines = jsonl(makeEvents()).split('\n'); lines.splice(3, 0, '');
+    const partial = parseRecording(lines.join('\n'));
+    expect(partial.needsAcknowledgement).toBe(true);
+    expect(partial.warnings.find(w => w.code === 'invalid_line')?.line).toBe(4);
+    expect(partial.warnings.some(w => w.code === 'capture_count_mismatch')).toBe(false);
+    const events = makeEvents(); events.splice(3, 0, structuredClone(events[2]));
+    expect(parseRecording(jsonl(events)).warnings.some(w => w.code === 'capture_count_mismatch')).toBe(false);
+  });
+  it('explains how to open an OTLP export without pretending it is a recording', () => {
+    expect(() => parseRecording(JSON.stringify({ resourceSpans: [] }))).toThrow('afr import-otlp');
+  });
+  it('accepts 256 Unicode code points in labels consistently with Python', () => {
+    const events = makeEvents(); events[1].data.name = '😀'.repeat(256);
+    const recording = parseRecording(jsonl(events));
+    expect(recording.needsAcknowledgement).toBe(false);
+    expect(buildView(recording).spans[0].name).toBe('😀'.repeat(256));
+  });
+  it('rejects escaped unpaired Unicode surrogates in values and object keys', () => {
+    const events = makeEvents(); events[1].data.input = { state: 'captured', value: '\udcff' };
+    expect(() => parseRecording(jsonl(events))).toThrow('invalid Unicode');
+    events[1].data.input.value = { '\ud800': 'invalid key' };
+    expect(() => parseRecording(jsonl(events))).toThrow('invalid Unicode');
+    events[1].data.input.value = { 'valid 😀': 'paired \ud83d\ude00' };
+    expect(parseRecording(jsonl(events)).needsAcknowledgement).toBe(false);
+  });
   it('reveals only evidence available at the playback cursor and does not run tools', () => {
     const r = parseRecording(jsonl(makeEvents()));
     expect(buildView(r,0).spans).toHaveLength(0);

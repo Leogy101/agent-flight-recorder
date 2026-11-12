@@ -1,63 +1,89 @@
 # Agent Flight Recorder
 
-**An offline incident viewer for AI agents.** Record instrumented operations into one portable file, follow the timeline, and see which evidence was captured, omitted, or left unfinished.
+<p align="center"><img src="viewer/src/assets/agent-flight-recorder.png" width="260" alt="Agent Flight Recorder logo: an aircraft over a recording device"></p>
 
-This is a standalone, framework-independent portfolio project. Version 0.1 is an alpha for local debugging: Python capture, a React/TypeScript viewer, and a documented JSONL format. No account, database, collector, provider SDK, or model credentials are required.
+**Understand what an AI agent actually did—and what the recording cannot tell you.**
 
-![An offline recording showing a failed refund attempt, its timeline, and captured arguments](docs/screenshots/flight-recorder.png)
+Capture explicitly instrumented operations into a portable JSONL file. Inspect model and tool boundaries, timing, retries, failures, and missing evidence in a local timeline. Step through recorded events without executing them again.
 
-## Try it locally
+Standalone and framework-agnostic. No account, database, collector, model credentials, or Python runtime dependencies. The viewer is bundled with the package. This is a local alpha, prepared for an open-source portfolio; it is not yet published to GitHub or PyPI.
 
-Requires Python 3.11 or later. The repository includes a built viewer; Node is needed only to develop it.
+![An executed local agent fails after correcting its tool arguments; the viewer shows the failed operation and captured input](docs/screenshots/executed-failure.png)
+
+[Watch the short browser demonstration](docs/screenshots/agent-demo.webm) · [Follow the narrated walkthrough](docs/demo-walkthrough.md)
+
+## Five-minute quickstart
+
+From this repository's root, with **Python 3.11–3.14** installed (macOS or Linux):
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade 'pip>=26.2'
 python -m pip install -e .
+python examples/record_agent.py --output-dir recordings/first-run --capture-content
 afr view
 ```
 
-The command opens a loopback-only viewer. Choose **A failed attempt** to inspect a refund agent that repeats an invalid argument, or open your own recording with the file picker. File contents stay in browser memory and are never uploaded to the viewer server. The examples make no model calls and perform no payments or other external actions.
+Node is unnecessary to run the bundled viewer. The installation steps may download build tools; recording and viewing then work offline. The package is not on a registry: use this checkout or a locally built wheel.
 
-The package is not published to a registry. Install it from this checkout or a locally built wheel.
+In the viewer, choose **Open a recording** and select `recordings/first-run/failure.jsonl`. Inspect the two `lookup_order` attempts: the first receives an integer and fails validation; the corrected string names an absent order, so the second call and the agent fail. Then open `success.jsonl`: the corrected lookup succeeds and the agent returns an answer. Use the event controls to inspect what was known at each step.
 
-## Record your own code
+The example **executes Python code and a read-only local catalog lookup**. Its provider is an explicitly labeled deterministic stand-in, not an LLM. No paid API or network is involved. `--capture-content` enables filtered synthetic inputs/outputs for inspection; omit it to use metadata-only capture. Repeating the command requires a new destination, or omit `--output-dir` for a fresh private temporary directory. See the [example guide](docs/example.md) and [90-second demonstration](docs/demo-walkthrough.md).
+
+## Why this exists
+
+An incident can be difficult to share when its evidence depends on a running observability stack. This project explores a small alternative: **one bounded recording, one local viewer, and explicit uncertainty**. It distinguishes application failure, recorder loss, unfinished work, intentional omission, and conflicting evidence.
+
+It complements existing tools rather than claiming a new tracing category:
+
+| Tool | Where it fits | This project's narrower scope |
+| --- | --- | --- |
+| [OpenTelemetry](https://opentelemetry.io/docs/) / [OpenInference](https://github.com/Arize-ai/openinference) | Telemetry standards and instrumentation for existing pipelines | Dependency-free explicit Python capture plus a limited file-only OTLP JSON adapter |
+| [Langfuse](https://langfuse.com/docs) | Broader LLM observability, evaluation, and prompt workflows | A single-run incident file, without operating a platform |
+| [Phoenix](https://arize.com/docs/phoenix) | Tracing and evaluation, including local use | A small portable evidence format and bounded offline inspection |
+| [LangSmith](https://docs.langchain.com/langsmith/home) | A proprietary observability and evaluation platform; not an open-source alternative | A standalone MIT-licensed local tool with no service account |
+
+See the [research and original build plan](docs/master-plan.md) for licensing distinctions and direct alternatives. Other unrelated projects use the same working name; no affiliation or unique invention is claimed.
+
+## Instrument your code
 
 ```python
 from agent_flight_recorder import Recorder
 
 with Recorder("run.jsonl") as recorder:
     with recorder.run("Support request"):
-        with recorder.span("tool", "Lookup order") as span:
-            result = your_lookup_function()  # Your code still calls the tool.
-            span.set_output(result)         # Omitted in default metadata mode.
+        with recorder.span("tool", "Lookup order", input={"order_id": "SYN-1001"}) as span:
+            result = your_lookup_function()  # Your application invokes the tool.
+            span.set_output(result)         # Content is omitted by default.
 ```
 
-Use `capture_content=True` to opt into filtered inputs and outputs. Pass `input=` to a span and call `span.set_usage(input_tokens=..., output_tokens=...)` when those values are available. Static names and allowlisted metadata remain visible by default, so do not put secrets in labels. See [privacy and threat model](docs/privacy.md).
+Opt into selected content with `capture_content=True`; add `redact_keys` and literal `redact_patterns` for your data. Filtering occurs before persistence. Labels and allowlisted metadata remain visible, so keep secrets out of operation names. Content filtering is not a guarantee of anonymity. See [privacy and security](docs/privacy.md).
 
-Recording uses synchronous, flushed writes and adds overhead. It observes explicitly instrumented boundaries; it does not discover every action automatically. Recorder failures preserve application results and original exceptions. An unmatched operation remains **incomplete**, never automatically failed. A recording with no detected gaps still cannot prove that every action was instrumented.
+Recorder failures preserve application results and original exceptions while reporting degraded evidence through `recorder.health` and, where writing remains possible, the file. It performs synchronous writes and adds overhead. One recording has one root run and one writer process. Sync context managers work inside async functions; threads need explicit parent IDs or copied context. Use a new `Recorder` for each run and a fresh span object for each scope.
 
-Sync context managers work inside asynchronous functions. New asyncio tasks inherit their context; threads should receive an explicit `parent_span_id` or an explicitly copied context. Each recording has one writer process. See [the contract](docs/contract.md) for fields and limits.
-
-## Local commands
+## Commands and files
 
 ```sh
 afr demo --output recordings/demo
 afr validate recordings/demo/demo-success.jsonl
 afr import-otlp trace-export.json --output imported.jsonl
 afr view --no-open --port 8765
-python examples/record_agent.py --output recordings/example.jsonl
 ```
 
-All output recordings are new files; existing ones are not overwritten. `validate` exits 0 for a valid capture without evidence warnings, 1 for a readable recording with warnings, and 2 for invalid input. `--allow-partial` explicitly permits recovery past malformed middle records. `import-otlp` accepts one documented OTLP JSON shape, requires `--trace-id` for multiple traces, and omits source content by default. See [interoperability](docs/interoperability.md).
+Recordings are created exclusively; existing files are not overwritten. `validate` exits **0** for no evidence warnings, **1** for readable but uncertain evidence, and **2** for invalid input. A recorded application failure can still validate cleanly. `--allow-partial` permits skipping malformed middle records with warnings. OTLP conversion requires explicit trace selection when several traces are present and omits source content by default.
 
-## What playback means
+The built-in refund/delivery demos are hand-authored synthetic illustrations. The [executing agent example](examples/record_agent.py) and [reviewed execution samples](fixtures/README.md) are separately identified. User-selected recordings stay in browser memory; the loopback server serves assets and bundled demos only.
 
-Playback moves through **already recorded evidence**. It never executes tools, reruns a model, restores process state, or undoes an action. Deterministic execution replay, live ingestion, orchestration, guardrails, cloud hosting, and automatic root-cause claims are outside this release.
+## Playback, not execution replay
 
-An imported completed span does not prove its start was recorded before a crash. Imported times and ordering come from the source, not the conversion time. Missing or redacted evidence cannot be reconstructed.
+Playback reveals saved evidence in recorded order. It never calls a model, invokes a tool, reads the example catalog again, restores memory, or undoes an action. Missing and redacted content cannot be recovered. Rerunning the example creates a new execution with new IDs and measured timing; deterministic application outcomes do not imply byte-identical recordings.
+
+OTLP imports reconstruct lifecycle records from exported spans. They cannot recover an operation that never exported. Missing endpoints remain incomplete, UNSET status remains unknown, and source timestamps—not conversion time—position imported operations. See the [interoperability contract](docs/interoperability.md).
 
 ## Develop and verify
+
+Use Node 24 for frontend development, matching CI:
 
 ```sh
 python -m pip install -e '.[dev]'
@@ -66,21 +92,21 @@ cd viewer
 npm ci
 npm test
 npm run build
+npx playwright install chromium
 cd ..
+node tests/browser-check.mjs
+python benchmarks/capture.py --output work/capture-benchmark.json
 python -m build
 ```
 
-The build emits the viewer into the Python package. Runtime capture has no third-party dependencies. Frontend dependencies are pinned in the npm lockfile. CI covers Python on macOS and Linux; successful local verification and pending external checks are recorded separately in [validation](docs/validation.md).
+CI tests Python on macOS/Linux, checks the installed wheel, and runs viewer unit tests and real Chromium acceptance. Its remote execution is still pending publication. Actual local test counts, performance measurements, and tested platforms are recorded in [validation](docs/validation.md), not inferred from configuration.
 
 ## Project guide
 
-- [Architecture](docs/architecture.md): boundaries, storage, and data flow.
-- [Event contract](docs/contract.md) and [JSON Schema](schema/event.schema.json): format and validation rules.
-- [Privacy](docs/privacy.md): content capture, sharing, and security limits.
-- [Interoperability](docs/interoperability.md): tested import subset and losses.
-- [Demo walkthrough](docs/demo-walkthrough.md): inspect a failure in 90 seconds.
-- [Approved master plan](docs/master-plan.md): research, milestones, and deferred scope.
+- [Architecture](docs/architecture.md), [event contract](docs/contract.md), and [JSON Schema](schema/event.schema.json).
+- [Engineering review](docs/engineering-review.md): confirmed findings, fixes, and deferred work.
+- [Dependencies and supported environments](docs/dependencies.md).
+- [Privacy boundaries](docs/privacy.md), [security reporting](SECURITY.md), and [contributing](CONTRIBUTING.md).
+- [Release preparation](docs/release-checklist.md) and [change log](CHANGELOG.md).
 
-Existing tools already provide excellent tracing and debugging. This project explores a deliberately small portable incident workflow, not a new observability category. The working title is shared by unrelated projects; this repository is independently implemented. See the research in the master plan for OpenTelemetry, OpenInference, Langfuse, Phoenix, LangSmith, and direct alternatives.
-
-MIT licensed. Only reviewed synthetic recordings belong in this repository. Real recordings are ignored by Git by default.
+MIT licensed; retain this permissive license for the initial release. Bundled third-party notices are included. Only reviewed synthetic recordings belong in the repository; real recordings are ignored by Git.

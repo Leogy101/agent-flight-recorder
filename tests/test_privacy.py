@@ -117,15 +117,66 @@ def test_large_metadata_and_unknown_attributes_are_omitted():
 
 def test_replacement_growth_is_bounded_and_filtered_ids_stay_valid():
     policy = PrivacyPolicy(True, redact_patterns=("E",) * 64)
-    assert policy.payload("E" * 100)["reason"] == "payload_limit"
-    assert policy.label("E" * 100) == "label_omitted"
+    assert policy.payload("E" * 100)["state"] == "redacted"
+    assert policy.label("E" * 100) == "[REDACTED]"
+    assert policy.payload("E " * 1000)["reason"] == "payload_limit"
     policy = PrivacyPolicy(True, redact_patterns=("abcd",))
     assert policy.attributes({"retry_of": "abcd123412341234"}) == {}
     assert policy.attributes({"retry_of": "not-an-id"}) == {}
 
 
+@pytest.mark.parametrize("patterns", [("abc", "bcd"), ("bcd", "abc"), ("abc", "abc", "bcd")])
+def test_overlapping_rules_cover_the_entire_original_match_in_any_order(patterns):
+    policy = PrivacyPolicy(True, redact_patterns=patterns)
+    assert policy.payload("abcd")["state"] == "redacted"
+    assert policy.label("before abcd after") == "before [REDACTED] after"
+    assert policy.attributes({"model": "abcd"}) == {"model": "[REDACTED]"}
+    assert policy.payload({"key": "abcd"})["value"] == {"key": "[REDACTED]"}
+    # Overlapping occurrences of the same pattern must also be covered.
+    assert PrivacyPolicy(True, redact_patterns=("aaa",)).payload("aaaa")["state"] == "redacted"
+
+
+@pytest.mark.parametrize("value", [
+    {"alpha": "first", "beta": "second"},
+    {"nested": [{"alpha": "first", "beta": "second"}]},
+    {"[REDACTED]": "first", "alpha": "second"},
+])
+def test_transformed_key_collisions_omit_the_payload_instead_of_overwriting(value):
+    policy = PrivacyPolicy(True, redact_patterns=("alpha", "beta"))
+    before = json.dumps(value)
+    result = policy.payload(value)
+    assert result == {"state": "omitted", "reason": "redaction_collision"}
+    assert json.dumps(value) == before
+
+
+def test_redaction_does_not_modify_the_caller_owned_structure():
+    value = {"password": "private", "text": "abcd", "nested": ["safe", "abcd"]}
+    before = json.dumps(value)
+    result = PrivacyPolicy(True, redact_patterns=("abc", "bcd")).payload(value)
+    assert json.dumps(value) == before
+    assert "abcd" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("value", [
+    "\udcff", "\ud800", "before\udfffafter", "\ud83d\ude00",
+    {"key": ["\udcff"]}, {"\udcff": "value"},
+])
+def test_non_scalar_payload_strings_and_keys_are_unavailable(value):
+    assert PrivacyPolicy(True).payload(value) == {"state": "unavailable", "reason": "unsupported_value"}
+
+
+def test_non_scalar_labels_are_omitted_but_ordinary_emoji_remain_valid():
+    policy = PrivacyPolicy(True)
+    assert policy.label("private\udcfflabel") == "label_omitted"
+    assert policy.attributes({"model": "private\udcffmodel"}) == {"model": "label_omitted"}
+    emoji = "Review \U0001f600"
+    assert policy.label(emoji) == emoji
+    assert policy.payload({emoji: emoji})["value"] == {emoji: emoji}
+
+
 @pytest.mark.parametrize("kwargs", [
     {"redact_patterns": ("",)}, {"redact_keys": "password"},
+    {"redact_patterns": ("\udcff",)}, {"redact_keys": ("\ud800",)},
     {"max_depth": -1}, {"max_payload_bytes": 9000}, {"capture_content": 1},
 ])
 def test_invalid_policy_configuration_is_explicit(kwargs):

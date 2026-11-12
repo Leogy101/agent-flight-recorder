@@ -7,12 +7,14 @@ OpenTelemetry or OpenInference packages.
 
 ## Supported input
 
-The supported envelope is the OTLP protobuf JSON trace representation:
+Input is UTF-8 (an optional UTF-8 BOM is accepted). The supported envelope is the OTLP protobuf JSON trace representation:
 `resourceSpans[].scopeSpans[].spans[]`. The converter accepts the camelCase field
 names in that representation. It does not accept arbitrary vendor exports,
 newline-delimited OTLP, `instrumentationLibrarySpans`, protobuf bytes, or base64
-trace/span IDs. IDs must be nonzero lowercase hex: 32 characters for a trace and
-16 for a span. Empty or all-zero parent IDs indicate no parent.
+trace/span IDs. IDs must be nonzero case-insensitive hex: 32 characters for a trace and
+16 for a span. Conversion normalizes IDs and the trace selector to lowercase without
+changing the source object. Empty or all-zero parent IDs indicate no parent. This follows
+the [OTLP JSON encoding rules](https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding).
 
 Each span supplies `traceId`, `spanId`, optional `parentSpanId`, `name`, `kind`,
 `startTimeUnixNano`, `endTimeUnixNano`, `status`, and `attributes`. Resource and
@@ -29,7 +31,9 @@ also checked before any output file is created. Output creation is exclusive wit
 owner-only file permissions where supported; an existing recording is never
 overwritten.
 
-JSON traversal is lazy, with at most 100,000 items in an individual object/array
+Before the CLI constructs a JSON object graph, a bounded lexical pass caps depth at 20, members/elements at 100,000 per container, and lexical tokens at 500,000. Tokens include keys and punctuation; quoted contents are skipped without building a token list. This conservative work bound can reject a dense document before its byte limit.
+
+After decoding, JSON traversal is lazy, with at most 100,000 items in an individual object/array
 and 500,000 visited values per bounded document. These defensive work limits can
 reject a dense file before its byte limit; they prevent small JSON tokens from
 expanding into an unbounded validation work queue. Payload depth reserves three
@@ -76,7 +80,8 @@ guess its MIME type or parse nested encodings. Duplicate mapped attribute names
 are rejected. Unknown attributes are discarded rather than decoded or copied.
 
 OTel `UNSET`/missing status becomes `unknown`; `OK` becomes `ok`; `ERROR` becomes
-`error`. Both numeric status enums and protobuf JSON enum names are supported.
+`error`. Numeric status enums are standard OTLP JSON. Protobuf JSON enum names
+are accepted as a convenience extension, not claimed as standard OTLP encoding.
 An error records the fixed category `source_error`; status descriptions, exception
 messages, stack traces, arbitrary source errors and source events are not copied.
 Usage is optional and unknown when absent. Cached-input or reasoning-output

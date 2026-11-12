@@ -24,7 +24,7 @@ MAX_CONTAINER_ITEMS = 100_000
 MAX_SAFE_INTEGER = 2**53 - 1
 _TRACE = re.compile(r"[0-9a-f]{32}\Z")
 _SPAN = re.compile(r"[0-9a-f]{16}\Z")
-_TIME = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z\Z")
+_TIME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\.([0-9]{1,9}))?Z\Z")
 _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\Z")
 _KINDS = {"run", "agent", "model", "tool", "retrieval", "step"}
 _TYPES = {"capture.started", "span.started", "span.ended", "event.recorded", "capture.ended"}
@@ -41,7 +41,23 @@ _SOURCE_WARNING_CODES = frozenset({
 
 
 def _integer(value, *, positive=False):
-    return type(value) is int and (1 if positive else 0) <= value <= MAX_SAFE_INTEGER
+    # JSON has numbers, not Python's separate int/float types. A wire value such
+    # as 1.0 or 1e0 is an integer in JSON Schema and in the browser consumer.
+    integral = type(value) is int or type(value) is float and math.isfinite(value) and value.is_integer()
+    return integral and (1 if positive else 0) <= value <= MAX_SAFE_INTEGER
+
+
+def _json_equal(left, right):
+    """Compare already validated JSON without Python's True == 1 coercion."""
+    if type(left) in (int, float) and type(right) in (int, float):
+        return left == right
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return left.keys() == right.keys() and all(_json_equal(value, right[key]) for key, value in left.items())
+    if type(left) is list:
+        return len(left) == len(right) and all(_json_equal(a, b) for a, b in zip(left, right))
+    return left == right
 
 
 def _require(condition, message):
@@ -242,7 +258,8 @@ def validate_events(events):
     for index, event in enumerate(events, 1):
         old = by_id.get(event["event_id"])
         if old is not None:
-            warn("duplicate_event" if old == event else "conflicting_duplicate", "Repeated event ID; conflicting data is not resolved." if old != event else "Identical event repeated; shown once in derived views.", index)
+            equivalent = _json_equal(old, event)
+            warn("duplicate_event" if equivalent else "conflicting_duplicate", "Identical event repeated; shown once in derived views." if equivalent else "Repeated event ID; conflicting data is not resolved.", index)
         else:
             by_id[event["event_id"]] = event
             unique.append((index, event))
@@ -310,7 +327,7 @@ def validate_events(events):
                 if event["type"] == "span.started":
                     warn("duplicate_span_start", "Span has multiple starts.", index)
                 else:
-                    equivalent = event["data"] == target[span_id]["data"] and event.get("source_time") == target[span_id].get("source_time") and event.get("elapsed_us") == target[span_id].get("elapsed_us")
+                    equivalent = _json_equal(event["data"], target[span_id]["data"]) and event.get("source_time") == target[span_id].get("source_time") and event.get("elapsed_us") == target[span_id].get("elapsed_us")
                     warn("duplicate_span_end" if equivalent else "conflicting_span_end", "Span has multiple ends; the outcome is ambiguous.", index)
             else:
                 target[span_id] = event

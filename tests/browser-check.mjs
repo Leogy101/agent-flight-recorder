@@ -28,15 +28,18 @@ try {
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, acceptDownloads: true });
   const page = await context.newPage();
-  const failures = [], external = [];
+  const failures = [], external = [], uploads = [];
   page.on('pageerror', error => failures.push(error.message));
   await page.route('**/*', route => {
     const target = route.request().url();
+    if (!['GET', 'HEAD'].includes(route.request().method()) || route.request().postData()) uploads.push(target);
     if (target.startsWith(url) || target.startsWith('blob:') || target.startsWith('data:')) route.continue();
     else { external.push(target); route.abort(); }
   });
   await page.goto(url);
   await page.getByRole('heading', { level: 1 }).waitFor();
+  await page.getByRole('img', { name: /Agent Flight Recorder/ }).waitFor();
+  await page.screenshot({ path: join(root, 'docs/screenshots/welcome.png'), fullPage: true });
   await page.getByRole('button', { name: /Explore an example/ }).click();
   await page.getByRole('heading', { name: 'Resolve a duplicate charge', exact: true, level: 1 }).waitFor();
   await page.getByRole('button', { name: /Issue refund.*attempt 1/ }).click();
@@ -119,6 +122,65 @@ try {
   await page.getByRole('button', { name: /Synthetic inventory lookup/ }).click();
   assert.match(await inspector.textContent(), /Reconstructed from a completed span/);
 
+  // Execute the reproducible agent through the actual recorder, then inspect
+  // both outcomes. Fixtures for these checks are not assembled by this script.
+  const executed = join(work, `executed-${randomUUID()}`);
+  execFileSync(python, ['examples/record_agent.py', '--output-dir', executed, '--capture-content'], { cwd: root });
+  await fileInput.setInputFiles(join(executed, 'success.jsonl'));
+  await page.locator('.summary-grid').getByText('Succeeded', { exact: true }).waitFor();
+  assert.match(await page.locator('.summary-grid').textContent(), /Root succeeded.*earlier errors recorded/);
+  await page.getByRole('button', { name: /lookup_order.*attempt 2/ }).click();
+  assert.match(await inspector.textContent(), /SYN-1001/);
+  assert.match(await inspector.textContent(), /shipped/);
+  assert.match(await inspector.textContent(), /\[REDACTED\]/);
+  assert(!(await inspector.textContent()).includes('synthetic.customer@example.invalid'));
+  await page.screenshot({ path: join(root, 'docs/screenshots/executed-success.png'), fullPage: true });
+  await fileInput.setInputFiles(join(executed, 'failure.jsonl'));
+  await page.locator('.summary-grid').getByText('Failed', { exact: true }).waitFor();
+  await page.getByRole('button', { name: /lookup_order.*attempt 2/ }).click();
+  assert.match(await inspector.textContent(), /OrderNotFound/);
+  assert.match(await inspector.textContent(), /SYN-4040/);
+  await page.screenshot({ path: join(root, 'docs/screenshots/executed-failure.png'), fullPage: true });
+
+  // Keyboard tab navigation and exact event inspection work without a mouse.
+  await page.getByRole('tab', { name: 'Details', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await page.getByRole('tab', { name: 'Raw events', selected: true }).waitFor();
+  assert.match(await page.getByRole('tabpanel').textContent(), /span.started/);
+  await page.keyboard.press('Home');
+  await page.getByRole('tab', { name: 'Details', selected: true }).waitFor();
+  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
+  assert.match(await page.getByLabel('Current stored event').textContent(), /span.started/);
+  assert.equal(await page.locator('.summary-grid').getByText('Failed', { exact: true }).count(), 0);
+  await page.getByRole('button', { name: 'Go to end', exact: true }).click();
+  assert.match(await page.getByLabel('Current stored event').textContent(), /OrderNotFound/);
+  await page.getByRole('button', { name: /Show all/ }).click();
+  await page.getByRole('button', { name: 'Reset playback' }).click();
+  assert.match(await page.getByLabel('Current stored event').textContent(), /capture.started/);
+  await page.getByRole('button', { name: 'Play recorded events' }).click();
+  await page.waitForFunction(() => Number(document.querySelector('[aria-label="Playback event position"]').value) > 0);
+  await page.getByRole('button', { name: 'Pause playback' }).click();
+  await page.getByRole('button', { name: /Show all/ }).click();
+
+  await page.getByRole('textbox', { name: 'Search recorded operations' }).fill('no matching operation');
+  assert.equal(await page.locator('.operation-row').count(), 0);
+  assert.match(await page.locator('.timeline-empty').textContent(), /No operations/);
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /lookup_order.*attempt 2/ }).click();
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Narrow layout must not overflow horizontally');
+  assert.match(await inspector.textContent(), /OrderNotFound/);
+  await page.screenshot({ path: join(root, 'docs/screenshots/narrow-view.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1050 });
+
+  const metadataOnly = join(work, `metadata-${randomUUID()}`);
+  execFileSync(python, ['examples/record_agent.py', '--scenario', 'success', '--output-dir', metadataOnly], { cwd: root });
+  await fileInput.setInputFiles(join(metadataOnly, 'success.jsonl'));
+  await page.locator('.summary-grid').getByText('Metadata only', { exact: true }).waitFor();
+  await page.getByRole('button', { name: /lookup_order.*attempt 2/ }).click();
+  assert.match(await inspector.textContent(), /Content was not retained/);
+  assert(!(await inspector.textContent()).includes('SYN-1001'));
+
   // Near-limit file: 4,998 operations plus root and capture boundaries = 10,000 events.
   const capture = structuredClone(original[0]);
   capture.data.privacy_mode = 'metadata_only';
@@ -154,7 +216,8 @@ try {
   const browserHeap = await page.evaluate(() => performance.memory?.usedJSHeapSize ?? null);
   assert.deepEqual(failures, []);
   assert.deepEqual(external, []);
-  const report = { browser: browser.version(), largeImportMs: Math.round(largeImportMs), filterMs: Math.round(filterMs), bytes: Buffer.byteLength(largeText), events: large.length, usedJsHeapBytes: browserHeap, pageErrors: failures, outboundRequests: external, checks: ['synthetic failure inspection', 'reduced export Python conformance', 'playback', 'kind filter', 'interrupted evidence', 'inert malicious markup', 'explicit partial import', 'conflict preserved after sharing', 'imported source-time intervals', '10000 event import/filter'] };
+  assert.deepEqual(uploads, []);
+  const report = { browser: browser.version(), largeImportMs: Math.round(largeImportMs), filterMs: Math.round(filterMs), bytes: Buffer.byteLength(largeText), events: large.length, usedJsHeapBytes: browserHeap, pageErrors: failures, outboundRequests: external, dataUploads: uploads, checks: ['synthetic failure inspection', 'reduced export Python conformance', 'playback', 'kind filter', 'interrupted evidence', 'inert malicious markup', 'explicit partial import', 'conflict preserved after sharing', 'imported source-time intervals', 'executed agent success with recovered error', 'executed agent failure inspection', 'keyboard inspector tabs', 'exact start/end event navigation', 'timed playback', 'empty search state', '390px narrow layout', 'default metadata-only execution capture', '10000 event import/filter'] };
   writeFileSync(join(work, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
 } finally {

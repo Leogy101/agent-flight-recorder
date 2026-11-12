@@ -98,6 +98,73 @@ def test_disk_failure_does_not_replace_original_exception(tmp_path):
     assert recorder.health["disabled"]
 
 
+def test_span_id_failure_preserves_operation_and_original_exception(tmp_path, monkeypatch, capfd):
+    path = tmp_path / "run.jsonl"
+    calls = []
+    original_error = RuntimeError("application error")
+
+    def unavailable_entropy():
+        raise OSError("SECRET_ENTROPY_DIAGNOSTIC")
+
+    with Recorder(path) as recorder:
+        monkeypatch.setattr("agent_flight_recorder.recorder.uuid.uuid4", unavailable_entropy)
+        with pytest.raises(RuntimeError) as caught:
+            with recorder.span("tool", "operation") as span:
+                calls.append("performed exactly once")
+                span.set_output("unused output")
+                raise original_error
+        assert caught.value is original_error
+    assert calls == ["performed exactly once"]
+    assert span.span_id is None
+    assert recorder.health["disabled"]
+    assert recorder.health["failed_events"] == 1
+    assert "span_id_failure" in recorder.health["warnings"]
+    assert [event["type"] for event in read_events(path)] == ["capture.started"]
+    assert "SECRET_ENTROPY_DIAGNOSTIC" not in capfd.readouterr().err
+
+
+def test_overlapping_redaction_and_key_collision_reach_file_without_raw_fallback(tmp_path):
+    path = tmp_path / "run.jsonl"
+    with Recorder(path, capture_content=True, redact_patterns=("abc", "bcd", "alpha", "beta")) as recorder:
+        with recorder.run("root", input={"alpha": "first", "beta": "second"}) as root:
+            root.set_output("abcd")
+    events = read_events(path)
+    start = next(event for event in events if event["type"] == "span.started")
+    end = next(event for event in events if event["type"] == "span.ended")
+    assert start["data"]["input"] == {"state": "omitted", "reason": "redaction_collision"}
+    assert end["data"]["output"]["state"] == "redacted"
+    assert all(secret not in path.read_text() for secret in ("alpha", "beta", "first", "second", "abcd"))
+
+
+def test_surrogateescape_input_keys_and_labels_produce_readable_native_capture(tmp_path):
+    from agent_flight_recorder.recording import load_recording
+
+    path = tmp_path / "run.jsonl"
+    surrogate = b"\xff".decode("utf-8", errors="surrogateescape")
+    calls = []
+    with Recorder(path, capture_content=True) as recorder:
+        with recorder.run("root" + surrogate, input=surrogate) as root:
+            calls.append("operation")
+            with recorder.span("tool", "lookup", input={surrogate: "value"}, attributes={"model": surrogate}) as tool:
+                tool.set_output({"nested": [surrogate]})
+                tool.event("note" + surrogate, payload=surrogate)
+            root.set_output("\U0001f600")
+    loaded = load_recording(path)
+    assert calls == ["operation"]
+    assert not loaded["warnings"]
+    starts = [event for event in loaded["events"] if event["type"] == "span.started"]
+    assert starts[0]["data"]["name"] == "label_omitted"
+    assert starts[0]["data"]["input"] == {"state": "unavailable", "reason": "unsupported_value"}
+    assert starts[1]["data"]["input"] == {"state": "unavailable", "reason": "unsupported_value"}
+    assert starts[1]["data"]["attributes"] == {"model": "label_omitted"}
+    annotation = next(event for event in loaded["events"] if event["type"] == "event.recorded")
+    assert annotation["data"]["name"] == "label_omitted"
+    assert annotation["data"]["payload"]["reason"] == "unsupported_value"
+    root_end = next(event for event in loaded["events"] if event["type"] == "span.ended" and event["span_id"] == root.span_id)
+    assert root_end["data"]["output"]["value"] == "\U0001f600"
+    assert "\\udcff" not in path.read_text()
+
+
 def test_unwritable_open_is_fail_open_and_warning_contains_no_path(tmp_path, monkeypatch, capfd):
     def denied(*args, **kwargs):
         raise PermissionError("SECRET_PATH")
@@ -272,6 +339,21 @@ def test_threads_use_explicit_parent_and_writer_sequence_is_serial(tmp_path):
     assert all(event["parent_span_id"] == root.span_id for event in workers)
 
 
+def test_all_relationships_within_the_declared_link_limit_are_preserved(tmp_path):
+    path = tmp_path / "run.jsonl"
+    links = []
+    with Recorder(path) as recorder:
+        with recorder.run("root"):
+            for _ in range(64):
+                with recorder.span("step", "prior operation") as prior:
+                    links.append({"span_id": prior.span_id, "relation": "follows_from"})
+            with recorder.span("step", "aggregate", links=links) as aggregate:
+                pass
+    start = next(event for event in read_events(path) if event["type"] == "span.started" and event["span_id"] == aggregate.span_id)
+    assert start["data"]["links"] == links
+    assert not recorder.health["warnings"]
+
+
 def test_process_reuse_rejects_writing_before_taking_lock(tmp_path, monkeypatch):
     path = tmp_path / "run.jsonl"
     with Recorder(path) as recorder:
@@ -292,6 +374,56 @@ def test_active_span_can_remain_incomplete_when_capture_is_closed(tmp_path):
     events = read_events(path)
     assert events[-1]["type"] == "capture.ended"
     assert not any(event["type"] == "span.ended" for event in events)
+
+
+def test_rejected_second_run_is_visible_as_capture_loss_without_changing_its_body(tmp_path):
+    from agent_flight_recorder.recording import load_recording
+
+    path = tmp_path / "run.jsonl"
+    calls = []
+    original_error = RuntimeError("second operation failure")
+    with Recorder(path) as recorder:
+        with recorder.run("first"):
+            calls.append("first")
+        with pytest.raises(RuntimeError) as caught:
+            with recorder.run("second"):
+                calls.append("second")
+                raise original_error
+        assert caught.value is original_error
+    events = read_events(path)
+    assert calls == ["first", "second"]
+    assert [event["data"]["name"] for event in events if event["type"] == "span.started"] == ["first"]
+    assert events[-1]["data"]["skipped_events"] == 2
+    assert events[-1]["seq"] == len(events) + 2
+    assert recorder.health["skipped_events"] == 2
+    assert {warning["code"] for warning in load_recording(path)["warnings"]} >= {"sequence_gap", "recording_loss"}
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["sequential_reuse", "nested_reuse"])
+def test_reused_span_boundaries_are_reported_without_duplicate_ids_or_context_leaks(tmp_path, nested):
+    path = tmp_path / "run.jsonl"
+    calls = []
+    with Recorder(path) as recorder:
+        with recorder.run("root") as root:
+            span = recorder.span("tool", "first operation")
+            with span:
+                calls.append("first")
+                if nested:
+                    with span:
+                        calls.append("second")
+            if not nested:
+                with span:
+                    calls.append("second")
+            with recorder.span("step", "after reuse") as after:
+                pass
+    events = read_events(path)
+    assert calls == ["first", "second"]
+    assert len([event for event in events if event.get("span_id") == span.span_id]) == 2
+    after_start = next(event for event in events if event["type"] == "span.started" and event["span_id"] == after.span_id)
+    assert after_start["parent_span_id"] == root.span_id
+    assert events[-1]["data"]["skipped_events"] == 2
+    assert events[-1]["seq"] == len(events) + 2
+    assert "reused_span" in recorder.health["warnings"]
 
 
 def test_unsupported_object_error_strings_and_links_never_invoke_user_code(tmp_path):

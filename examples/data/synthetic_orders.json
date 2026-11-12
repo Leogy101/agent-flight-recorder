@@ -1,0 +1,17 @@
+{
+  "description": "Entirely synthetic local data. No real customer or credential information.",
+  "orders": [
+    {
+      "order_id": "SYN-1001",
+      "status": "shipped",
+      "customer_email": "synthetic.customer@example.invalid",
+      "internal_note": "SYNTHETIC-INTERNAL-NOTE-DO-NOT-SHARE"
+    },
+    {
+      "order_id": "SYN-1002",
+      "status": "processing",
+      "customer_email": "another.synthetic.customer@example.invalid",
+      "internal_note": "SYNTHETIC-INTERNAL-NOTE-DO-NOT-SHARE"
+    }
+  ]
+}

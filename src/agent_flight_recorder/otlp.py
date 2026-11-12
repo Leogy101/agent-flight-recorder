@@ -160,14 +160,19 @@ def convert_otlp(source: dict, *, trace_id=None, capture_content=False):
             _require(type(scope) is dict, "Invalid OTLP scope entry")
             for span in _array(scope.get("spans"), "Expected OTLP spans array"):
                 _require(type(span) is dict, "Invalid OTLP span")
-                _require(_identifier(span.get("traceId"), _TRACE), "Invalid OTLP trace ID")
-                spans.append(span)
+                source_trace_id = span.get("traceId")
+                _require(type(source_trace_id) is str and _identifier(source_trace_id.lower(), _TRACE), "Invalid OTLP trace ID")
+                # OTLP IDs are case-insensitive hex; our native contract uses
+                # lowercase. Copy before normalization so source input is intact.
+                spans.append({**span, "traceId": source_trace_id.lower()})
                 _require(len(spans) <= MAX_EVENTS, "OTLP input span count limit exceeded")
     available = {span["traceId"] for span in spans}
     _require(bool(available), "OTLP export contains no spans")
     if trace_id is None:
         _require(len(available) == 1, "Multiple traces found; select one with trace_id")
         trace_id = next(iter(available))
+    if type(trace_id) is str:
+        trace_id = trace_id.lower()
     _require(_identifier(trace_id, _TRACE) and trace_id in available, "Selected trace is not present")
     selected = [span for span in spans if span["traceId"] == trace_id]
     _require(2 * len(selected) + 2 <= MAX_EVENTS, "OTLP conversion exceeds output event count limit")
@@ -186,8 +191,12 @@ def convert_otlp(source: dict, *, trace_id=None, capture_content=False):
 
     operations = []
     for span in selected:
+        if type(span.get("spanId")) is str:
+            span["spanId"] = span["spanId"].lower()
         _require(_identifier(span.get("spanId"), _SPAN), "Invalid OTLP span ID")
         parent = span.get("parentSpanId")
+        if type(parent) is str:
+            parent = parent.lower()
         if parent not in (None, "", "0000000000000000"):
             _require(_identifier(parent, _SPAN), "Invalid OTLP parent span ID")
         else:

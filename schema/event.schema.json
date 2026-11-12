@@ -17,9 +17,10 @@
     "elapsed_us": {"$ref": "#/$defs/count"},
     "span_id": {"$ref": "#/$defs/spanId"},
     "parent_span_id": {"$ref": "#/$defs/spanId"},
-    "data": {"type": "object"}
+    "data": {"type": "object", "properties": {"reconstructed": {"type": "boolean"}}}
   },
   "allOf": [
+    {"if": {"required": ["parent_span_id"]}, "then": {"properties": {"type": {"const": "span.started"}}}},
     {
       "if": {"properties": {"type": {"const": "capture.started"}}},
       "then": {"properties": {"data": {"$ref": "#/$defs/captureStart"}}}
@@ -45,7 +46,7 @@
     "count": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
     "label": {"type": "string", "maxLength": 256},
     "spanId": {"type": "string", "pattern": "^(?!0{16}$)[0-9a-f]{16}$"},
-    "time": {"type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"},
+    "time": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"},
     "payload": {
       "type": "object", "required": ["state"],
       "properties": {
@@ -72,7 +73,7 @@
         "capture_mode": {"enum": ["native_lifecycle", "imported_completed_spans"]},
         "privacy_mode": {"enum": ["metadata_only", "selected_content"]},
         "coverage": {"type": "string", "maxLength": 256},
-        "source": {"type": "object", "properties": {"name": {"$ref": "#/$defs/label"}, "version": {"$ref": "#/$defs/label"}}},
+        "source": {"type": "object", "required": ["name", "version"], "properties": {"name": {"$ref": "#/$defs/label"}, "version": {"$ref": "#/$defs/label"}}},
         "limits": {
           "type": "object", "required": ["max_file_bytes", "max_events", "max_event_bytes", "max_payload_bytes", "max_depth"],
           "properties": {
@@ -100,7 +101,7 @@
       "properties": {
         "status": {"enum": ["ok", "error", "cancelled", "unknown"]},
         "output": {"$ref": "#/$defs/payload"}, "reconstructed": {"type": "boolean"},
-        "usage": {"type": "object", "properties": {"input_tokens": {"$ref": "#/$defs/count"}, "output_tokens": {"$ref": "#/$defs/count"}}},
+        "usage": {"type": "object", "additionalProperties": false, "properties": {"input_tokens": {"$ref": "#/$defs/count"}, "output_tokens": {"$ref": "#/$defs/count"}}},
         "error": {"type": "object", "required": ["type"], "properties": {"type": {"$ref": "#/$defs/label"}, "code": {"$ref": "#/$defs/label"}}}
       }
     },

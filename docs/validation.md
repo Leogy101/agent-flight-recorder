@@ -1,39 +1,44 @@
 # Validation and release status
 
-Verified November 12, 2026. This is a local alpha implementation of the approved MVP. The repository and installable artifacts are prepared locally; GitHub publication and package-registry publication have not occurred. The configured GitHub Actions workflow has not run remotely.
+Verified November 12, 2026 for Phase 2 of the existing local alpha. No GitHub push, public release, tag, or registry upload has occurred. GitHub Actions is configured but has not run remotely. These results are from executed local commands, not inferred from CI configuration.
 
-## Verification results
+## Executed verification
 
-| Check | Result |
+| Check | Actual result |
 | --- | --- |
-| Python suite on macOS, Python 3.14.6 | 105 tests and 32 subtests passed. |
-| Python suite on Linux ARM64, Python 3.11 container | 105 tests and 32 subtests passed. |
-| Viewer unit tests | 28 passed, covering bounded parsing, sharing, evidence conflicts, privacy, timing, and interoperability. |
-| TypeScript and production bundle | Passed. Only current hashed assets and reviewed demos are bundled. |
-| Real Chromium browser acceptance | Ten workflows passed, including upload, failure inspection, playback, filtering, interrupted evidence, inert malicious markup, partial-import acknowledgement, conflict preservation after sharing, source-time imports, and a 10,000-event recording. No page errors or attempted remote requests in these checks. |
-| Cross-language format | Independently produced TypeScript fixture, Python fixtures, and converted OTLP example pass the Python reader and JSON Schema. Browser-produced reduced exports also pass the Python reader. |
-| Packaging | Wheel and source distribution build successfully. A fresh virtual environment installed the wheel offline with no dependencies; recording, default omission, parsing, packaged assets, demos, and local serving passed smoke checks. |
-| Dependency checks | Python requirements check passed. npm production dependency audit reported zero vulnerabilities at the time of verification. |
+| Python suite, macOS / Python 3.14.6 | **157 tests and 37 subtests passed**, 4.57 seconds. |
+| Python suite, Linux ARM64 / Python 3.11.18 container | **157 tests and 37 subtests passed**, 4.63 seconds. Source was mounted read-only and copied into the disposable container. |
+| Viewer unit suite | **43 tests passed**. |
+| TypeScript and production build | Passed; current JS/CSS/logo assets are bundled with the Python package. |
+| Real Chromium acceptance | **18 workflows passed**. No page errors, attempted external requests, or data uploads were observed. |
+| Executing local agent | Success and intended failure both ran; actual lookups, validation/retry order, original exception identity, unchanged catalog, no-network behavior, and both privacy modes are covered by 14 integration tests. |
+| Clean quickstart | Fresh virtual environment, installer upgrade, editable installation, both selected-content scenarios, and CLI validation completed. Success has 15 events; failure has 13. Both validate with zero evidence warnings. |
+| Installed wheel | Fresh interpreter without pip or development packages installed the wheel offline with `--no-index --no-deps`. Recording, default privacy, reader, CLI validation, server headers, JS/CSS/logo, demos, and notices passed the smoke script. |
+| Cross-language contract | Synthetic Python, independently produced TypeScript, executed example, converted OTLP, and browser-produced reduced files pass their applicable schema/reader checks. |
+| Dependency checks | `pip check` passed. Full npm audit, including development packages, reported zero vulnerabilities. The Python environment audit reported no known vulnerabilities after upgrading the affected installer; the unpublished project has no advisory-database entry. |
+| Demonstration | A real-browser synthetic walkthrough was recorded as a 22.72-second VP9 WebM, 1440 × 1280, 2,835,619 bytes. Screenshots and a video frame were inspected visually. |
 
-The tests cover original exception identity, cancellation, concurrent task isolation, explicit thread parentage, failed writes, exclusive creation, partial trailing records, hostile serialization hooks, cyclic/deep inputs, unsafe numbers, secret omission, safe text rendering, source clock distinctions, and preserved uncertainty. A reduced export cannot turn a known conflicting outcome into a claimed success.
+The browser checks include failure inspection; Python-readable reduced export; cursor playback; filtering; interrupted evidence; inert hostile markup; explicit partial import; conflicts retained after sharing; source-time imports; successful agent recovery; failed agent execution; keyboard inspector tabs; exact start/end navigation; timed playback; empty search state; 390-pixel layout; metadata-only capture; and the 10,000-event workload. Desktop screenshots were captured at 1440 pixels wide. The successful and failed samples are separately inspectable.
 
-The package name `agent-flight-recorder-local` returned no existing PyPI distribution during the check. This is not a reservation. Agent Flight Recorder remains a working title shared by unrelated projects.
+Earlier checks exposed real issues and did not all pass on the first attempt: review repros exposed the defects listed in [engineering review](engineering-review.md), browser acceptance found indistinguishable retry row names, and the first installed-wheel smoke check incorrectly assumed absolute asset URLs. The accessible names and smoke script were corrected and the affected checks rerun successfully. No unresolved test failure is being treated as a pass.
 
-## Measured local performance
+## Measured performance
 
-Reference machine: Apple M4 Pro, Mac16,11, 64 GiB RAM, macOS 26.3.1, arm64. Recording benchmark uses Python 3.14.6. Browser benchmark uses headless Chromium 158.0.8127.18 and Node 26.10.0.
+Reference machine: Apple M4 Pro, Mac16,11, 64 GiB RAM, macOS 26.3.1, arm64. Capture uses Python 3.14.6; browser checks use Chromium 158.0.8127.18 and Node 26.10.0.
 
-| Measurement | Observed result |
+| Workload | Observed result |
 | --- | --- |
-| 1,000 empty tool scopes, metadata only | 19.834 microseconds median and 23.125 microseconds p95 per scope, including two synchronous flushed records, IDs, filtering, and context work. |
-| Capture size | 2,004 records, 1,285,612 bytes; about 642 bytes per event. |
-| Browser import and first rendered view | 345 ms for 10,000 synthetic events totaling 3,946,806 bytes. |
-| Search/filter update | 9 ms in that browser acceptance run. |
-| Browser reported used JavaScript heap | About 53.5 MB at the end of the acceptance sequence. This is not peak memory or total browser process memory. |
+| 1,000 empty tool scopes, metadata only | **20.250 μs median; 24.666 μs p95 per scope**, including two synchronous flushed records, IDs, filtering, and context work. |
+| Capture size | **2,004 events; 1,285,619 bytes**, about 641.5 bytes/event. |
+| Browser import plus first rendered view | **356 ms** for **10,000 events / 3,946,806 bytes** in the latest acceptance run. |
+| Search/filter update | **6 ms** in that run. |
+| Browser-reported used JavaScript heap | **53,500,000 bytes (~53.5 MB)** at the end of the acceptance sequence. This is not peak or total browser memory. |
 
-These are single-machine synthetic measurements, not production guarantees. The recording workload does not model slow disks, network filesystems, large sensitive payloads, or model latency. The browser measurement includes test-driver overhead; it is not an isolated parser microbenchmark. No fsync durability or bounded disk latency is claimed.
+These are single-machine synthetic measurements, not production guarantees. The browser numbers include test-driver overhead and normal background activity. Capture timing does not simulate slow disks, network filesystems, large sensitive payloads, or actual model latency. Flushing is not fsync durability. A new Unicode check initially raised the capture median to 31.875 μs; an ASCII fast path reduced that measured overhead while retaining Unicode regression coverage.
 
-Reproduce the checks from the repository root:
+## Reproduce
+
+From an installed development checkout:
 
 ```sh
 python -m pytest
@@ -46,12 +51,18 @@ npx playwright install chromium
 cd ..
 node tests/browser-check.mjs
 python -m build
+python -m venv --without-pip work/installed
+python -m pip --python work/installed/bin/python install --no-index --no-deps dist/*.whl
+work/installed/bin/python tests/installed_smoke.py
+node scripts/record-demo.mjs
 ```
 
-The browser script starts and stops its own loopback server and writes temporary reports under `work/browser`. It saves a screenshot of the synthetic failure under `docs/screenshots`.
+Browser checks start and stop their own loopback server, save their report under `work/browser`, and refresh reviewed synthetic screenshots under `docs/screenshots`. The demo script produces the short WebM and does not invoke recorded tools. Use fresh output directories for example runs; they intentionally refuse overwrites.
 
-## Milestone status and remaining validation
+The wheel test deliberately uses a separate interpreter so an editable source installation cannot hide missing package files. CI also rejects checked-in viewer assets that differ from a fresh build. The source distribution includes the example's local JSON catalog, schema, tests, docs, viewer source/logo, and build configuration.
 
-M1 through M4 are implemented: independent foundation and schema, native recorder, offline viewer, and portable imports/exports. M5's local package, automated verification, measured limits, documentation, and demonstration are complete. Actual developer usability sessions and the ten-minute onboarding/five-minute diagnosis targets remain unmeasured. Collect that feedback before expanding scope.
+## Honest support and remaining work
 
-Support is verified here for Python on macOS and Linux ARM64, and for the viewer in Chromium. Windows, other browser engines, distributed processes, production workloads, and execution replay are not verified support claims. The tool provides recorded playback only and has no API credentials or execution engine.
+Locally verified: macOS/Python 3.14, Linux ARM64/Python 3.11, and Chromium. CI targets the minimum/latest Python versions on macOS/Linux and Node 24 for frontend work; those remote matrix jobs remain unexecuted. Python 3.12/3.13, Windows, other browser engines, screen readers, real providers, distributed processes, and production workloads are not claimed as individually verified here.
+
+The five-minute quickstart was followed mechanically in a clean environment. Human completion time and the original onboarding/diagnosis targets remain unmeasured. Get first-time developer feedback, configure private vulnerability reporting, and run remote CI after authorized publication before tagging v0.1.0. See [release preparation](release-checklist.md).

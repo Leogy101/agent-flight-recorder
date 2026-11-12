@@ -149,6 +149,16 @@ class OTLPTests(unittest.TestCase):
         child = next(item for item in operations(result, "span.started") if item["span_id"] == "0000000000000002")
         self.assertEqual(child["parent_span_id"], "0000000000000001")
 
+    def test_otlp_case_insensitive_hex_is_normalized_without_mutation(self):
+        source = export(span(spanId="ABCDEF1234567890", traceId="AB" * 16), span(2, traceId="ab" * 16, parentSpanId="ABCDEF1234567890"))
+        original = copy.deepcopy(source)
+        result = convert_otlp(source, trace_id="AB" * 16)
+        self.assertEqual(source, original)
+        self.assertEqual({item["trace_id"] for item in result}, {"ab" * 16})
+        starts = operations(result, "span.started")
+        self.assertEqual({item["span_id"] for item in starts}, {"abcdef1234567890", "0000000000000002"})
+        self.assertEqual(next(item for item in starts if "parent_span_id" in item)["parent_span_id"], "abcdef1234567890")
+
 
 if __name__ == "__main__":
     unittest.main()

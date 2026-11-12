@@ -43,9 +43,16 @@ export const WARNING_MESSAGES: Record<string, string> = {
 export class RecordingError extends Error { constructor(message: string) { super(message); this.name = 'RecordingError'; } }
 const object = (v: any): v is Record<string, any> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const int = (v: any, min = 0) => Number.isSafeInteger(v) && v >= min;
-const label = (v: any) => typeof v === 'string' && v.length <= 256;
+const label = (v: any) => typeof v === 'string' && v.length <= 512 && [...v].length <= 256;
 const require = (ok: any, message: string) => { if (!ok) throw new RecordingError(message); };
-const endFingerprint = (e: Event) => JSON.stringify([e.data, e.elapsed_us ?? null, e.source_time ?? null]);
+// JSON object member order has no semantic meaning. Compare validated, bounded
+// JSON without merging untrusted keys into an object or altering source events.
+function canonicalJson(value: any): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (object(value)) return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+const endFingerprint = (e: Event) => canonicalJson([e.data, e.elapsed_us ?? null, e.source_time ?? null]);
 
 export function timestampNs(value: unknown): bigint | undefined {
   if (typeof value !== 'string') return undefined;
@@ -62,9 +69,21 @@ function bounded(value: any) {
     const [v, depth] = queue.pop()!;
     if (Array.isArray(v) || object(v)) require(depth < LIMITS.max_depth, 'JSON nesting exceeds the supported depth.');
     if (typeof v === 'number') require(Number.isFinite(v) && (!Number.isInteger(v) || Number.isSafeInteger(v)), 'A JSON number is outside the supported range.');
+    if (typeof v === 'string') require(validUnicode(v), 'A JSON string contains invalid Unicode.');
     if (Array.isArray(v)) for (const item of v) queue.push([item, depth + 1]);
-    else if (object(v)) for (const key of Object.keys(v)) queue.push([v[key], depth + 1]);
+    else if (object(v)) for (const key of Object.keys(v)) { require(validUnicode(key), 'A JSON key contains invalid Unicode.'); queue.push([v[key], depth + 1]); }
   }
+}
+
+function validUnicode(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(++i);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+  }
+  return true;
 }
 
 function payload(value: any) {
@@ -191,7 +210,8 @@ export function parseRecording(text: string): Recording {
   let physicalLines = 0;
   for (let n = 0; n < text.length; n++) if (text.charCodeAt(n) === 10 && ++physicalLines > LIMITS.max_events) throw new RecordingError('This file exceeds the 10,000 physical-line import limit. No data was imported.');
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
-  const records = lines.map((line, index) => ({ line, number: index + 1 })).filter(item => item.line.trim());
+  if (lines.at(-1) === '') lines.pop();
+  const records = lines.map((line, index) => ({ line, number: index + 1 }));
   require(records.length <= LIMITS.max_events, 'This file exceeds the 10,000 event import limit. No data was imported.');
   require(records.length > 0, 'This file contains no recording events.');
   const warnings: Warning[] = [];
@@ -210,18 +230,20 @@ export function parseRecording(text: string): Recording {
     let value: any;
     try { value = JSON.parse(line); }
     catch {
-      const trailing = i === records.length - 1 && !/\r?\n$/.test(text) && unfinishedJson(line);
+      const trailing = !!line.trim() && i === records.length - 1 && !/\r?\n$/.test(text) && unfinishedJson(line);
       add(trailing ? 'partial_trailing_line' : 'invalid_line', number); if (!trailing) needsAcknowledgement = true; continue;
     }
     rejectDuplicateKeys(line);
+    if (object(value) && Array.isArray(value.resourceSpans) && value.schema_version === undefined) throw new RecordingError('This is an OTLP export. Convert it with afr import-otlp, then open the resulting JSONL recording.');
     // An unknown version is never silently discarded as a recoverable bad line.
     if (object(value) && value.schema_version !== undefined && value.schema_version !== '0.1') throw new RecordingError('Unsupported recording version. This viewer supports 0.1 only.');
     try { validateEvent(value); }
     catch (error) {
+      if (error instanceof RecordingError && /invalid Unicode/.test(error.message)) throw new RecordingError(`Record ${number} contains invalid Unicode. No data was imported.`);
       if (error instanceof RecordingError && /exceeds|nesting|range/.test(error.message)) throw new RecordingError(`Record ${number} exceeds supported safety limits. No data was imported.`);
       add('invalid_line', number); needsAcknowledgement = true; continue;
     }
-    const serialized = JSON.stringify(value);
+    const serialized = canonicalJson(value);
     if (seen.has(value.event_id)) {
       const conflict = seen.get(value.event_id) !== serialized; add(conflict ? 'conflicting_duplicate' : 'duplicate_event', number);
       if (conflict) {
@@ -232,7 +254,7 @@ export function parseRecording(text: string): Recording {
     }
     seen.set(value.event_id, serialized); events.push(value);
   }
-  require(events.length > 0, 'No valid events remain to display.');
+  require(events.length > 0, 'No valid recording events remain to display. Open a recorder JSONL file; convert OTLP exports with afr import-otlp first.');
   require(events.every(e => e.trace_id === events[0].trace_id && e.recording_id === events[0].recording_id), 'A file must contain one recording and one trace. No data was imported.');
   const starts = events.filter(e => e.type === 'capture.started');
   const ends = events.filter(e => e.type === 'capture.ended');
@@ -246,7 +268,7 @@ export function parseRecording(text: string): Recording {
   if (starts.length > 1) add('duplicate_capture_start'); if (ends.length > 1) add('duplicate_capture_end');
   if ((starts.length && events[0].type !== 'capture.started') || (ends.length && events.at(-1)?.type !== 'capture.ended')) add('capture_position');
   for (const end of ends) {
-    if (end.data.written_events !== records.length) add('capture_count_mismatch');
+    if (end.data.written_events !== events.length) add('capture_count_mismatch');
     if (end.data.skipped_events || end.data.failed_events) add('recording_loss');
     if (end.data.limit_reached) add('capture_limit_reached');
   }
@@ -326,6 +348,11 @@ export function eventPosition(e: Event, recording: Recording): number | undefine
 
 export function buildView(recording: Recording, cursor = recording.events.length - 1): ViewModel {
   const visible = recording.events.slice(0, cursor + 1);
+  const atEnd = cursor >= recording.events.length - 1;
+  // Conflicting duplicate event IDs were excluded during import; their exact
+  // observation point is not reconstructable. Apply those file-wide findings
+  // at the full-recording view, never before the playback cursor reaches them.
+  const visibleConflicts = new Set(atEnd ? recording.conflictSpanIds : []);
   const starts = new Map<string, Event>(); const ends = new Map<string, Event[]>();
   let sourceMinimum: bigint | undefined;
   for (const e of recording.events) { const t = timestampNs(e.source_time); if (t !== undefined && (sourceMinimum === undefined || t < sourceMinimum)) sourceMinimum = t; }
@@ -333,11 +360,14 @@ export function buildView(recording: Recording, cursor = recording.events.length
   let duration = 0; let timed = false;
   for (const e of recording.events) { const p = position(e); if (p !== undefined) { timed = true; duration = Math.max(duration, p); } }
   for (const e of visible) {
-    if (e.type === 'span.started' && !starts.has(e.span_id!)) starts.set(e.span_id!, e);
+    if (e.type === 'span.started') {
+      if (starts.has(e.span_id!)) visibleConflicts.add(e.span_id!);
+      else starts.set(e.span_id!, e);
+    }
     if (e.type === 'span.ended') { const list = ends.get(e.span_id!) ?? []; list.push(e); ends.set(e.span_id!, list); }
   }
   const spans: Span[] = [...starts.entries()].map(([id, start]) => {
-    const allEnds = ends.get(id); const end = allEnds?.[0]; const conflicting = recording.conflictSpanIds.includes(id) || !!allEnds && allEnds.length > 1 && allEnds.some(e => endFingerprint(e) !== endFingerprint(end!));
+    const allEnds = ends.get(id); const end = allEnds?.[0]; const conflicting = visibleConflicts.has(id) || !!allEnds && allEnds.length > 1 && allEnds.some(e => endFingerprint(e) !== endFingerprint(end!));
     return { id, parent: start.parent_span_id, kind: start.data.kind, name: start.data.name, start, end, status: conflicting ? 'conflicting' : end?.data.status ?? 'incomplete', from: position(start), to: end ? position(end) : undefined, depth: 0, conflicting };
   });
   const byId = new Map(spans.map(s => [s.id, s]));
@@ -347,11 +377,11 @@ export function buildView(recording: Recording, cursor = recording.events.length
   const walk = (first: Span) => { const stack: [Span, number][] = [[first, 0]]; while (stack.length) { const [span, depth] = stack.pop()!; if (seen.has(span.id)) continue; seen.add(span.id); span.depth = Math.min(depth, 12); ordered.push(span); for (const child of [...(children.get(span.id) ?? [])].reverse()) stack.push([child, depth + 1]); } };
   for (const r of roots) walk(r); for (const s of spans) if (!seen.has(s.id)) walk(s);
   const rootSpans = spans.filter(s => !s.parent);
-  const hasConflicts = recording.warnings.some(w => ['conflicting_duplicate','conflicting_span_end','duplicate_span_start'].includes(w.code));
+  const hasConflicts = spans.some(s => s.conflicting) || atEnd && recording.warnings.some(w => ['conflicting_duplicate','conflicting_span_end','duplicate_span_start'].includes(w.code));
   const outcome = rootSpans.length === 0 ? 'Unknown' : hasConflicts || rootSpans.some(s => s.status === 'conflicting') ? 'Conflicting' : rootSpans.some(s => s.status === 'error') ? 'Failed' : rootSpans.some(s => s.status === 'incomplete') ? 'Unfinished' : rootSpans.some(s => s.status === 'cancelled') ? 'Cancelled' : rootSpans.every(s => s.status === 'ok') ? 'Succeeded' : 'Unknown';
   const modelBelow = new Set<string>();
   for (const s of [...ordered].reverse()) if (s.parent && (s.kind === 'model' || modelBelow.has(s.id))) modelBelow.add(s.parent);
-  const modelSpans = spans.filter(s => s.kind === 'model' && !modelBelow.has(s.id));
+  const modelSpans = spans.filter(s => s.kind === 'model' && !s.conflicting && !modelBelow.has(s.id));
   const tokenTotal = (key: string) => { const vals = modelSpans.map(s => s.end?.data.usage?.[key]).filter(v => v !== undefined); const sum = vals.reduce((a, b) => a + b, 0); return vals.length && Number.isSafeInteger(sum) ? sum : undefined; };
   return { spans: ordered, annotations: visible.filter(e => e.type === 'event.recorded'), duration, timed, outcome, inputTokens: tokenTotal('input_tokens'), outputTokens: tokenTotal('output_tokens') };
 }

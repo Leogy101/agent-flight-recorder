@@ -9,6 +9,7 @@ import sys
 import webbrowser
 
 from .recording import load_recording, write_recording
+from ._json_preflight import preflight_json
 from .otlp import convert_otlp
 from .server import make_server
 
@@ -82,7 +83,8 @@ def main(argv: list[str] | None = None) -> int:
                 raw = handle.read(25 * 1024 * 1024 + 1)
             if len(raw) > 25 * 1024 * 1024:
                 raise ValueError("OTLP input exceeds 25 MiB")
-            source = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_constant)
+            text = preflight_json(raw)
+            source = json.loads(text, object_pairs_hook=_unique_object, parse_constant=_constant)
             events = convert_otlp(source, trace_id=args.trace_id, capture_content=args.capture_content)
             write_recording(events, args.output)
             print(f"Converted {len(events)} events. Coverage: imported completed spans. Output: {args.output}")

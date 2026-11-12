@@ -19,6 +19,11 @@ _ATTRIBUTE_STRINGS = frozenset({
 })
 
 
+def _scalar_text(value: str) -> bool:
+    """Check an exact built-in string without encoding or invoking hooks."""
+    return value.isascii() or not any("\ud800" <= char <= "\udfff" for char in value)
+
+
 class _Unsupported(Exception):
     pass
 
@@ -28,6 +33,10 @@ class _Limit(Exception):
 
 
 class _Cycle(Exception):
+    pass
+
+
+class _KeyCollision(Exception):
     pass
 
 
@@ -70,8 +79,8 @@ class PrivacyPolicy:
         for values in (redact_keys, redact_patterns):
             if type(values) not in (tuple, list) or len(values) > 64:
                 raise ValueError("redaction rules must be a bounded list or tuple")
-            if any(type(value) is not str or not 1 <= len(value) <= 256 for value in values):
-                raise ValueError("redaction rules must be nonempty strings up to 256 characters")
+            if any(type(value) is not str or not 1 <= len(value) <= 256 or not _scalar_text(value) for value in values):
+                raise ValueError("redaction rules must be nonempty Unicode scalar strings up to 256 characters")
         self.capture_content = capture_content
         self.max_payload_bytes = max_payload_bytes
         self.max_depth = max_depth
@@ -91,18 +100,40 @@ class PrivacyPolicy:
         )
 
     def _filter_string(self, value: str) -> tuple[str, int]:
+        # Match every rule against the original text. Sequential replacements
+        # can hide a later overlapping match and leave part of its secret in
+        # the output. A difference array merges covered ranges using memory
+        # bounded by the input, rather than by the number of matching rules.
+        if not self.redact_patterns:
+            return value, 0
+        coverage = [0] * (len(value) + 1)
         count = 0
-        for pattern in self.redact_patterns:
-            occurrences = value.count(pattern)
-            if occurrences:
-                # Repeated short replacement rules must not expand input
-                # exponentially. Check the exact replacement size first.
-                expanded_size = len(value) + occurrences * (len("[REDACTED]") - len(pattern))
-                if expanded_size > max(self.max_payload_bytes, 256):
-                    raise _Limit
-                value = value.replace(pattern, "[REDACTED]")
-                count += occurrences
-        return value, count
+        for pattern in set(self.redact_patterns):
+            offset = value.find(pattern)
+            while offset != -1:
+                coverage[offset] += 1
+                coverage[offset + len(pattern)] -= 1
+                count += 1
+                offset = value.find(pattern, offset + 1)
+        if not count:
+            return value, 0
+        parts = []
+        active = output_size = 0
+        redacting = False
+        for offset, char in enumerate(value):
+            active += coverage[offset]
+            if active:
+                part = "" if redacting else "[REDACTED]"
+                redacting = True
+            else:
+                part = char
+                redacting = False
+            output_size += len(part)
+            if output_size > max(self.max_payload_bytes, 256):
+                raise _Limit
+            if part:
+                parts.append(part)
+        return "".join(parts), count
 
     def label(self, value: object) -> str:
         """Return bounded metadata without invoking unknown object behavior."""
@@ -110,7 +141,7 @@ class PrivacyPolicy:
             return "unnamed"
         # Labels are caller-approved metadata, not arbitrary payloads. A long
         # label is omitted rather than cutting through a configured secret.
-        if len(value) > 256:
+        if len(value) > 256 or not _scalar_text(value):
             return "label_omitted"
         try:
             filtered, _ = self._filter_string(value)
@@ -155,6 +186,8 @@ class PrivacyPolicy:
             return {"state": "omitted", "reason": "payload_limit", "truncated": True}
         except _Cycle:
             return {"state": "unavailable", "reason": "cyclic_value"}
+        except _KeyCollision:
+            return {"state": "omitted", "reason": "redaction_collision"}
         except _Unsupported:
             return {"state": "unavailable", "reason": "unsupported_value"}
         except Exception:
@@ -179,6 +212,8 @@ class PrivacyPolicy:
         if value_type is str:
             if len(value) > self.max_payload_bytes:
                 raise _Limit
+            if not _scalar_text(value):
+                raise _Unsupported
             filtered, count = self._filter_string(value)
             budget.redacted += count
             budget.charge(len(json.dumps(filtered, ensure_ascii=True)))
@@ -201,11 +236,17 @@ class PrivacyPolicy:
                     raise _Unsupported
                 if len(key) > self.max_payload_bytes:
                     raise _Limit
+                if not _scalar_text(key):
+                    raise _Unsupported
                 if key in _UNSAFE_KEYS:
                     budget.redacted += 1
                     continue
                 safe_key, count = self._filter_string(key)
                 budget.redacted += count
+                if safe_key in result:
+                    # Preserve neither value when transformed keys collide:
+                    # overwriting one would invent an ambiguous input shape.
+                    raise _KeyCollision
                 budget.charge(len(json.dumps(safe_key, ensure_ascii=True)) + 1)
                 if self._key(key) in self._keys:
                     budget.redacted += 1

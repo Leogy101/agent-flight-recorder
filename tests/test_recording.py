@@ -194,6 +194,31 @@ class RecordingTests(unittest.TestCase):
         self.assertTrue({"missing_span_end", "missing_root_end", "capture_closed_with_open_spans", "sequence_gap", "capture_count_mismatch"}.issubset(issues))
         self.assertEqual(missing_end[1]["data"].get("status"), None)
 
+    def test_json_equality_preserves_boolean_number_conflicts(self):
+        for same_event_id in (True, False):
+            with self.subTest(same_event_id=same_event_id):
+                events = recording()
+                events[0]["data"]["privacy_mode"] = "selected_content"
+                events[2]["data"]["output"] = {"state": "captured", "value": {"answer": [1]}}
+                duplicate = copy.deepcopy(events[2])
+                duplicate["data"]["output"]["value"]["answer"] = [True]
+                if not same_event_id:
+                    duplicate["event_id"] = str(uuid4())
+                events.insert(3, duplicate)
+                expected = "conflicting_duplicate" if same_event_id else "conflicting_span_end"
+                self.assertIn(expected, codes(events))
+                duplicate["data"]["output"]["value"]["answer"] = [1.0]
+                self.assertNotIn(expected, codes(events))
+
+    def test_integer_wire_values_match_json_schema_and_browser(self):
+        text = encoded(recording()).replace('"seq": 1,', '"seq": 1e0,').replace('"elapsed_us": 2,', '"elapsed_us": 2.0,')
+        self.assertEqual(load_recording(text, from_text=True)["warnings"], [])
+        for bad in (True, 1.5, float("inf")):
+            events = recording()
+            events[1]["seq"] = bad
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_events(events)
+
     def test_capture_health_counts_are_evidence_even_with_complete_spans(self):
         events = recording()
         events[-1]["data"].update(failed_events=3, skipped_events=2, limit_reached=True)
@@ -294,6 +319,8 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(timestamp_ns("2026-11-12T12:00:00.000000002Z") - timestamp_ns("2026-11-12T12:00:00.000000001Z"), 1)
         self.assertEqual(timestamp_ns("1970-01-01T00:00:00Z"), 0)
         self.assertEqual(timestamp_ns("1969-12-31T23:59:59.999999999Z"), -1)
+        with self.assertRaises(ValueError):
+            timestamp_ns("2026-11-12T12:00:00.١Z")
 
     def test_unicode_line_separators_do_not_split_json_records(self):
         events = recording()

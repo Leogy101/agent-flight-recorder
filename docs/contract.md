@@ -1,6 +1,6 @@
 # Recording contract 0.1
 
-Implementation baseline for the approved local recorder. All producers and consumers use this contract. UTF-8 JSONL, one trace and recording per file; exactly one JSON object per line; new files only. Version 0.1 is the only supported version in this release. Unknown fields are inert and subject to bounds.
+Implementation baseline for the approved local recorder. All producers and consumers use this contract. UTF-8 JSONL with Unicode scalar strings (unpaired surrogate code points are unsupported), one trace and recording per file; exactly one JSON object per line; new files only. Version 0.1 is the only supported version in this release. Unknown fields are inert and subject to bounds.
 
 ## Envelope
 
@@ -34,10 +34,23 @@ Native seq is attempted observation order and elapsed_us is the axis. Imported s
 
 Recorder I/O/normalization failures preserve original exceptions/results and do not skip/duplicate application operations. One file one writer/process; new exclusive output with restrictive permissions; flushed append not fsync or crash-proof promise. No SDK runtime dependencies.
 
-## Shared module interface
+## Reader and conversion API
 
-Core owner creates `privacy.py`, `recorder.py`, `__init__.py`. Privacy exports `PrivacyPolicy(capture_content=False, redact_keys=(), redact_patterns=())`, `.payload(value) -> descriptor`, `.attributes(mapping) -> dict`, `.label(value) -> str`, and `MISSING`. Recorder exports `Limits` dataclass with above field names.
+`load_recording(path_or_text, *, from_text=False, allow_partial=False)` returns
+`{events, warnings, partial}`; warning entries have static `code`, `message`, and
+optional physical `line`. `validate_events(events)` returns evidence warnings
+and raises `ValueError` for invalid envelopes or bounds. `write_recording(events,
+path)` preflights then creates an exclusive new file.
 
-Importer owner creates `otlp.py`, `recording.py`, own tests and interoperability docs. `load_recording(path_or_text, *, from_text=False, allow_partial=False)` returns `{events: list, warnings: list[dict(code,message,line?)], partial: bool}`. `validate_events(events)` returns warnings, raises ValueError on invalid required envelopes/limits. `convert_otlp(source: dict, *, trace_id=None, capture_content=False) -> list[dict]` returns filtered native events. `write_recording(events, path)` validates/bounds output before exclusive writing. Use core PrivacyPolicy; define no conflicting core files.
+`convert_otlp(source, *, trace_id=None, capture_content=False)` returns filtered,
+reconstructed events for the documented subset. It neither modifies the source
+object nor executes source content. Consumers treat object key order as
+irrelevant to duplicate equality, distinguish JSON booleans from numbers, and
+accept integral numeric notation such as `1`, `1.0`, and `1e0` within safe bounds.
 
-Viewer owner creates `viewer/` frontend and tests; `npm run build` emits bundled static assets into `src/agent_flight_recorder/static/`. Viewer duplicates consumer validation per contract, provides reduced export in browser. Root owns packaging, CLI/server, schema, synthetic demos/fixtures, integration tests, docs, and benchmarks. No one modifies other owners' files without coordination.
+Use one root run per Recorder and fresh span instances per scope. Reusing them
+still runs application bodies, but unsupported boundaries are counted as lost
+evidence. If runtime ID generation fails, capture degrades and an inert span's
+`span_id` can be `None`; check recorder health rather than assuming all scopes
+were recorded. Configuration errors such as an existing destination remain
+explicit before execution.

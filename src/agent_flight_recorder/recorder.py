@@ -261,6 +261,15 @@ class Recorder:
             self._notice("privacy_failure")
             return {"state": "omitted", "reason": "filter_failure"}
 
+    def _skip_observation(self, code: str) -> None:
+        """Keep intentionally discarded boundaries visible in the artifact."""
+        if not self._process_ok():
+            return
+        with self._lock:
+            self._seq += 1
+            self._skipped += 1
+            self._notice(code)
+
     def _label(self, value) -> str:
         try:
             return self.privacy.label(value)
@@ -284,11 +293,16 @@ class Recorder:
 
 
 class Span:
-    """An observation scope. It never calls a model or tool itself."""
+    """One observation scope; create a fresh instance for each operation.
+
+    A scope must not be shared across threads or asynchronous tasks. It never
+    calls a model or tool itself. Reuse runs the body but records skipped
+    boundaries instead of inventing another operation with the same ID.
+    """
 
     def __init__(self, recorder: Recorder, kind, name, *, input=MISSING, attributes=None, parent_span_id=None, links=None, root=False):
         self.recorder = recorder
-        self.span_id = uuid.uuid4().hex[:16]
+        self.span_id = None
         self._kind = kind
         self._name = name
         self._input = input
@@ -301,18 +315,33 @@ class Span:
         self._ended = False
         self._token = None
         self._recording = True
+        self._skipped_scope = False
         self._output = {"state": "unavailable", "reason": "not_supplied"}
         self._usage = {}
+        if not recorder._process_ok():
+            self._recording = False
+        else:
+            try:
+                self.span_id = uuid.uuid4().hex[:16]
+            except Exception:
+                # ID allocation is recorder I/O too. An entropy-source
+                # failure must not prevent the application scope from running.
+                self._recording = False
+                with recorder._lock:
+                    recorder._failed += 1
+                    recorder._disabled = True
+                    recorder._notice("span_id_failure")
 
     def __enter__(self) -> Span:
         recorder = self.recorder
         if self._entered:
-            if not self._ended:
-                self._entry_depth += 1
-            recorder._notice("reused_span")
+            self._entry_depth += 1
+            recorder._skip_observation("reused_span")
             return self
         self._entered = True
         self._entry_depth = 1
+        if not self._recording:
+            return self
         if not recorder._process_ok():
             self._recording = False
             return self
@@ -321,7 +350,8 @@ class Span:
                 if self._root:
                     if recorder._root_claimed:
                         self._recording = False
-                        recorder._notice("multiple_root_spans")
+                        self._skipped_scope = True
+                        recorder._skip_observation("multiple_root_spans")
                         return self
                     recorder._root_claimed = True
                 parent = None if self._root else recorder._parent.get()
@@ -344,7 +374,7 @@ class Span:
                 self._attributes = None
                 if type(self._links) in (list, tuple) and recorder.limits.max_depth >= 4:
                     links = []
-                    for link in self._links[:32]:
+                    for link in self._links[:64]:
                         if type(link) is dict and len(link) <= 8 and all(type(key) is str for key in link):
                             linked_id, relation = link.get("span_id"), link.get("relation")
                             if _valid_span_id(linked_id) and type(relation) is str and relation in ("retry_of", "follows_from"):
@@ -359,10 +389,20 @@ class Span:
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> bool:
+        if self._ended:
+            if self._entry_depth:
+                self._entry_depth -= 1
+                self.recorder._skip_observation("reused_span")
+            return False
         if self._entry_depth > 1:
             self._entry_depth -= 1
+            self.recorder._skip_observation("reused_span")
             return False
-        if self._ended or not self._recording:
+        self._entry_depth = 0
+        if not self._recording:
+            self._ended = True
+            if self._skipped_scope:
+                self.recorder._skip_observation("multiple_root_spans")
             return False
         self._ended = True
         recorder = self.recorder
