@@ -6,15 +6,28 @@
 
 Capture explicitly instrumented operations into a portable JSONL file. Inspect model and tool boundaries, timing, retries, failures, and missing evidence in a local timeline. Step through recorded events without executing them again.
 
-Standalone and framework-agnostic. No account, database, collector, model credentials, or Python runtime dependencies. The viewer is bundled with the package. This is a local alpha, prepared for an open-source portfolio; it is not yet published to GitHub or PyPI.
+Standalone and framework-agnostic. No account, database, collector, model credentials, or Python runtime dependencies. The viewer is bundled with the package. Release candidate: **v0.1.0-alpha.1** (Python package version `0.1.0a1`). This is alpha software for local debugging. Public GitHub publication is pending approval; there is no PyPI release.
 
 ![An executed local agent fails after correcting its tool arguments; the viewer shows the failed operation and captured input](docs/screenshots/executed-failure.png)
 
 [Watch the short browser demonstration](docs/screenshots/agent-demo.webm) · [Follow the narrated walkthrough](docs/demo-walkthrough.md)
 
+## Useful when
+
+- A tool fails after several model decisions: inspect its recorded arguments, error category, and explicit retry relationship.
+- An agent stops unexpectedly: distinguish an observed failure from an operation with no recorded end.
+- A teammate needs a small incident artifact: preview a reduced copy without running a collection service.
+
 ## Five-minute quickstart
 
-From this repository's root, with **Python 3.11–3.14** installed (macOS or Linux):
+With **Python 3.11–3.14** installed (macOS or Linux), clone the release and enter its directory. This public clone command becomes available only after the alpha is published; until then, use the prepared local checkout.
+
+```sh
+git clone --branch v0.1.0-alpha.1 --depth 1 https://github.com/Leogy101/agent-flight-recorder.git
+cd agent-flight-recorder
+```
+
+Then install and run:
 
 ```sh
 python3 -m venv .venv
@@ -81,6 +94,12 @@ Playback reveals saved evidence in recorded order. It never calls a model, invok
 
 OTLP imports reconstruct lifecycle records from exported spans. They cannot recover an operation that never exported. Missing endpoints remain incomplete, UNSET status remains unknown, and source timestamps—not conversion time—position imported operations. See the [interoperability contract](docs/interoperability.md).
 
+## Architecture and measured limits
+
+Your application invokes the model/tool → explicit Python scopes filter and append events → a browser file picker opens the recording → an in-memory timeline displays saved evidence. The local server serves static assets only. There is no data ingestion API. See [architecture](docs/architecture.md) and [the event contract](docs/contract.md).
+
+Default bounds are 25 MiB per recording, 10,000 events, 64 KiB per event, and 8 KiB per opted-in payload. The Phase 2 reference measurement on an Apple M4 Pro opened 10,000 events (3.95 MB) in 356 ms, filtered in 6 ms, and recorded empty tool scopes at 20.25 μs median / 24.67 μs p95. These are synthetic observations, not production guarantees. [Validation](docs/validation.md) records release-candidate measurements, exact environments, and reproduction commands.
+
 ## Develop and verify
 
 Use Node 24 for frontend development, matching CI:
@@ -101,12 +120,16 @@ python -m build
 
 CI tests Python on macOS/Linux, checks the installed wheel, and runs viewer unit tests and real Chromium acceptance. Its remote execution is still pending publication. Actual local test counts, performance measurements, and tested platforms are recorded in [validation](docs/validation.md), not inferred from configuration.
 
+## Near-term roadmap
+
+Qualify the alpha with unfamiliar developers, improve keyboard/screen-reader usability based on feedback, and add concrete interoperability fixtures when users encounter unsupported exports. Broader browser/OS support comes with verification, not assumption. Cloud collection, orchestration, automatic instrumentation, and execution replay are outside this alpha's scope.
+
 ## Project guide
 
 - [Architecture](docs/architecture.md), [event contract](docs/contract.md), and [JSON Schema](schema/event.schema.json).
 - [Engineering review](docs/engineering-review.md): confirmed findings, fixes, and deferred work.
 - [Dependencies and supported environments](docs/dependencies.md).
 - [Privacy boundaries](docs/privacy.md), [security reporting](SECURITY.md), and [contributing](CONTRIBUTING.md).
-- [Release preparation](docs/release-checklist.md) and [change log](CHANGELOG.md).
+- [Release preparation](docs/release-checklist.md), [alpha release notes](docs/release-notes-v0.1.0-alpha.1.md), [publication instructions](docs/publication.md), and [change log](CHANGELOG.md).
 
-MIT licensed; retain this permissive license for the initial release. Bundled third-party notices are included. Only reviewed synthetic recordings belong in the repository; real recordings are ignored by Git.
+MIT licensed. Independently implemented; not an OpenClaw component, fork, or official integration. Bundled third-party notices are included. Only reviewed synthetic recordings belong in the repository; real recordings are ignored by Git.

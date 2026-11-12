@@ -2,7 +2,7 @@
 
 The React/TypeScript viewer reads one bounded JSONL recording in browser memory. The Python CLI serves the compiled files; end users do not need Node.
 
-Development (Node 22.12+; tested with Node 26):
+Development: use Node 24, matching CI (alpha qualification uses Node 24.22.3):
 
 ```sh
 npm ci

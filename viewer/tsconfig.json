@@ -9,7 +9,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["vite/client", "vitest/globals", "node"],
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true
   },
   "include": ["src", "vite.config.ts"]
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { buildView, decodeRecording, eventPosition, formatDuration, LIMITS, parseRecording, reducedExport, type Event as RecordedEvent, type Payload, type Recording } from './model';
 import brandLogo from './assets/agent-flight-recorder.png';
+import { VIEWER_VERSION } from './version.ts';
 
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -213,7 +214,7 @@ export default function App() {
     <a className="skip-link" href="#workspace">Skip to recording</a>
     <header className="topbar">
       <a className="brand" href="#" onClick={e => { e.preventDefault(); closeRecording(); }} aria-label="Agent Flight Recorder home"><span className="brand-mark"><Icon name="flight" size={25}/></span><span>Agent Flight Recorder<span className="brand-caption">LOCAL INCIDENT WORKSPACE</span></span></a>
-      <div className="topbar-actions"><span className="local-badge"><span/> Local only</span><span className="version">v0.1</span><button className="button secondary" onClick={() => fileInput.current?.click()} disabled={busy}><Icon name="upload"/> Open recording</button></div>
+      <div className="topbar-actions"><span className="local-badge"><span/> Local only</span><span className="version">v{VIEWER_VERSION}</span><button className="button secondary" onClick={() => fileInput.current?.click()} disabled={busy}><Icon name="upload"/> Open recording</button></div>
       <input ref={fileInput} type="file" accept=".jsonl,.ndjson,.json" aria-label="Choose recording file" className="visually-hidden" onChange={e => void openFile(e.target.files?.[0])}/>
     </header>
 

@@ -1,28 +1,27 @@
-# Preparing the first public 0.1.0 release
+# v0.1.0-alpha.1 publication gate
 
-Phase 2 prepares a locally verified alpha for GitHub. It does not publish the repository or package. Retain the existing MIT license: it fits the intended small, reusable open-source debugging tool; preserve bundled third-party notices and identify the user-supplied logo as project artwork.
+The prepared release is an alpha of the existing independent project. Python packaging uses `0.1.0a1`; the GitHub tag and viewer use `0.1.0-alpha.1`. Schema and transformation version `0.1` are intentionally separate. Historical synthetic fixtures retain the provenance of their original generation.
 
-## Completed locally
+## Required local evidence
 
-- Existing architecture reviewed; confirmed important defects reproduced and fixed with regression coverage.
-- Executing offline agent example, reviewed sample recordings, privacy defaults, and failure walkthrough supplied.
-- README, architecture/contract, dependency/support policy, security guidance, screenshots, and contribution instructions prepared.
-- Python, viewer, browser, package, dependency, and performance verification results recorded in `validation.md`.
-- Local commits created; nothing pushed or published.
+- Current source, complete reachable Git history plus reflog coverage, and exact release artifacts have been scanned for credentials, private configuration, personal paths, and accidental logs. See [security review](release-security-review.md).
+- Review the Git author and committer identity that will become public. Changing future configuration does not change earlier commits. Do not rewrite history or change the identity without authorization.
+- Confirm the MIT project license and bundled MIT notices for React, React DOM, Scheduler, and Vite's helper. Preserve the supplied logo and its provenance. This repository contains no OpenClaw code, adapter, branding, or dependency.
+- Qualify a clean clone and fresh environment: install, run both offline agent scenarios, validate recordings, open the viewer, inspect/play back events, import the OTLP sample, create a reduced export, and stop/restart cleanly.
+- Execute Python, viewer, browser, and installed-package checks; reproduce the documented benchmarks. Record actual environments and results in [validation](validation.md).
+- Verify package versions, empty Python runtime dependencies, source archive contents, bundled viewer freshness, and release-file SHA-256 hashes. Use exact alpha filenames, not a wildcard that includes old `0.1.0` artifacts.
+- Commit verified preparation locally. Record the final commit and bind the release artifacts to it. Keep the repository working tree clean.
 
-## Before a public release or tag
+## Approval and external gates
 
-1. Choose the final GitHub repository name and description; check naming collisions and use the intended public commit-author email. The working title is shared by unrelated projects.
-2. Create the repository and push only when authorized. Let the configured GitHub Actions matrix complete; local results do not substitute for a remote run.
-3. Enable an actual private vulnerability-reporting channel and update `SECURITY.md` with its destination. Do not invent a contact address or publish sensitive reports in public issues.
-4. Have at least one unfamiliar developer follow the five-minute quickstart and diagnose the example failure. Automated browser acceptance does not measure human onboarding time or replace a screen-reader review.
-5. Recheck dependency advisories and the exact wheel/source contents, then tag an explicitly labeled alpha or 0.1.0 as appropriate. Publish registry artifacts only after separately deciding the package name and release policy.
+No public repository, push, external tag, or release is authorized by preparation alone. Present the candidate, security findings, public commit identity, exact destination `Leogy101/agent-flight-recorder`, and artifact hashes for explicit approval.
 
-## Optional follow-up, driven by use
+After approval, follow [the publication runbook](publication.md). Create the approved public repository, enable and verify private vulnerability reporting, then push the reviewed commit. GitHub Actions must actually complete successfully for that exact commit before the tag/release gate. A configuration file or local test pass is not a remote CI result. Publish the annotated `v0.1.0-alpha.1` tag and a prerelease with the reviewed files, then verify published metadata and downloaded checksums.
 
-- Test Firefox, Safari, Windows, screen readers, and slow-disk behavior before claiming support.
-- Consolidate version strings when the next version is introduced; the current producer, CLI, and package version agree.
-- Consider a shared cross-language malformed-input corpus, rather than adding a framework or rewriting the parser.
-- Expand OTLP mappings only with concrete source fixtures. Source exporter drop counts, links, and arbitrary events are presently not mapped; full conformance is not claimed.
+No PyPI publishing is part of this request. No live OpenClaw credential access, GlauxOS inspection, credential changes, destructive Git operation, or history rewrite is part of preparation or the publication runbook.
 
-Do not add distributed ingestion, cloud accounts, automatic instrumentation, model orchestration, or execution replay simply to increase feature count.
+## Remaining alpha limitations
+
+Recorded playback is not deterministic execution replay. Capture is explicit, synchronous, single-process, plaintext, and not an audit-grade record. The importer supports a limited OTLP file shape. Unknown or missing evidence stays unknown. The simulated provider is not a real language model.
+
+Human onboarding/diagnosis timing, screen-reader usability, additional browsers, Windows, and production/slow-disk behavior remain follow-up work. Obtain first-time developer feedback before declaring stable support; do not add cloud services or orchestration merely to expand the feature list.

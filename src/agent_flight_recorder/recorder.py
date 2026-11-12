@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .privacy import MAX_SAFE_INTEGER, MISSING, PrivacyPolicy
+from ._version import __version__
 
 
 _SPAN_ID = re.compile(r"[0-9a-f]{16}\Z")
@@ -158,7 +159,7 @@ class Recorder:
             self._disabled = True
             self._notice("open_failure")
         self._emit("capture.started", {
-            "recorder_version": "0.1.0", "capture_mode": "native_lifecycle",
+            "recorder_version": __version__, "capture_mode": "native_lifecycle",
             "privacy_mode": "selected_content" if self.privacy.capture_content else "metadata_only",
             "coverage": "explicit_instrumented_boundaries", "limits": asdict(self.limits),
         })

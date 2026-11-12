@@ -19,3 +19,26 @@ coverage/
 test-results/
 playwright-report/
 .DS_Store
+
+# Local credentials/configuration and logs must never enter a release.
+.openclaw/
+.glauxos/
+.aws/
+.ssh/
+.npmrc
+.pypirc
+openclaw.json
+openclaw.json5
+glauxos.json
+glauxos.json5
+credentials*.json
+secrets.*
+*.pem
+*.key
+*.p12
+id_rsa
+id_ed25519
+*.log
+
+# Release artifacts are reviewed and attached separately, not committed.
+release-artifacts/

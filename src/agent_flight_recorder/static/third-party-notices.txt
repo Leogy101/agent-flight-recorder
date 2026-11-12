@@ -1,10 +1,13 @@
 # Third party notices
 
-The bundled viewer includes React, React DOM, and Scheduler. Each is distributed under the following license. Their exact versions are recorded in `viewer/package-lock.json`. The Python runtime has no third-party package dependencies.
+The bundled viewer includes React, React DOM, Scheduler, and Vite's module-preload runtime helper. These components are distributed under the following MIT license. Their exact versions are recorded in `viewer/package-lock.json`. Development tools and downloaded test browsers are not included in the Python distribution. The Python runtime has no third-party package dependencies.
 
 MIT License
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Vite core/module-preload helper:
+Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

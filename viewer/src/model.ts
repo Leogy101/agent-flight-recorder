@@ -1,4 +1,5 @@
 /** Bounded, side-effect-free consumer of recording contract 0.1. */
+import { VIEWER_VERSION } from './version.ts';
 export const LIMITS = { max_file_bytes: 25 * 1024 * 1024, max_events: 10_000, max_event_bytes: 64 * 1024, max_payload_bytes: 8 * 1024, max_depth: 20 } as const;
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Payload = { state: 'captured' | 'omitted' | 'redacted' | 'unavailable'; value?: Json; reason?: string; truncated?: boolean; redacted_fields?: number };
@@ -411,7 +412,7 @@ export function reducedExport(recording: Recording): string {
   const envelope = (type: EventType, recordedAt: string, elapsed?: number): Event => ({ schema_version: '0.1', recording_id: recordingId, trace_id: traceId, event_id: crypto.randomUUID(), seq: output.length + 1, type, recorded_at: recordedAt, ...(native ? { elapsed_us: elapsed ?? 0 } : {}), data: {} });
   const start = envelope('capture.started', iso(origin), 0);
   const issues = [...new Set(recording.warnings.map(w => Object.hasOwn(WARNING_MESSAGES, w.code) ? w.code : 'source_issue'))];
-  start.data = { recorder_version: '0.1.0', capture_mode: recording.mode, privacy_mode: 'metadata_only', coverage: native ? 'Explicit instrumented boundaries only' : 'Imported completed spans; earlier capture completeness is unknown', limits: { ...LIMITS }, transform: { kind: 'reduced_share', version: '0.1', source_issues: issues } };
+  start.data = { recorder_version: VIEWER_VERSION, capture_mode: recording.mode, privacy_mode: 'metadata_only', coverage: native ? 'Explicit instrumented boundaries only' : 'Imported completed spans; earlier capture completeness is unknown', limits: { ...LIMITS }, transform: { kind: 'reduced_share', version: '0.1', source_issues: issues } };
   output.push(start);
   const spanLabels = new Map<string, string>(); let annotationIndex = 0;
   for (const source of recording.events) {

@@ -12,6 +12,7 @@ from .recording import load_recording, write_recording
 from ._json_preflight import preflight_json
 from .otlp import convert_otlp
 from .server import make_server
+from ._version import DISPLAY_VERSION
 
 
 def _unique_object(pairs):
@@ -29,7 +30,7 @@ def _constant(_value):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="afr", description="Inspect agent recordings offline. Playback never executes tools.")
-    parser.add_argument("--version", action="version", version="Agent Flight Recorder 0.1.0")
+    parser.add_argument("--version", action="version", version=f"Agent Flight Recorder {DISPLAY_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     view = sub.add_parser("view", help="Serve the bundled viewer on loopback")
     view.add_argument("--port", type=int, default=0, help="Port; 0 chooses an available port")
