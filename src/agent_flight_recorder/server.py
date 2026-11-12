@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 from urllib.parse import unquote, urlsplit
 
 STATIC = Path(__file__).with_name("static")
@@ -25,6 +26,15 @@ CSP = (
     "worker-src 'self' blob:; object-src 'none'; base-uri 'none'; "
     "form-action 'none'; frame-ancestors 'none'"
 )
+
+
+class _LoopbackHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer resolves a canonical hostname before listening. This viewer
+        # binds only numeric loopback and needs no DNS-dependent server name.
+        TCPServer.server_bind(self)
+        self.server_name = "localhost"
+        self.server_port = self.server_address[1]
 
 
 def make_server(port: int = 0, *, asset_root: Path | None = None) -> ThreadingHTTPServer:
@@ -91,4 +101,4 @@ def make_server(port: int = 0, *, asset_root: Path | None = None) -> ThreadingHT
         def do_HEAD(self):
             self._asset(head=True)
 
-    return ThreadingHTTPServer(("127.0.0.1", port), AssetHandler)
+    return _LoopbackHTTPServer(("127.0.0.1", port), AssetHandler)

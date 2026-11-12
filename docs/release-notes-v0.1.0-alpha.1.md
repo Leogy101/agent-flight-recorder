@@ -8,6 +8,7 @@ The first alpha of a standalone, framework-agnostic tool for recording and inspe
 - Bounded JSONL recordings with parent spans, error categories, retry links, timing, optional usage, and warnings for incomplete or contradictory evidence.
 - A bundled local viewer with timeline inspection, filters, selected-event details, recorded playback, and a previewable reduced sharing export.
 - Metadata-only capture by default, opt-in filtered payloads, literal/key redaction rules, exclusive output creation, and a loopback-only asset server.
+- Loopback startup avoids hostname resolution, addressing the resolver stall observed during macOS qualification on Python 3.11 and 3.14. Startup, HTTP, shutdown, and same-port restart checks retain bounded, sanitized failure diagnostics.
 - A narrow OTLP JSON file importer for one selected trace, including selected OpenTelemetry GenAI and OpenInference fields. Imported span boundaries are marked reconstructed; source timing and unknown status remain explicit.
 - An executable local support-agent example: actual Python control flow, a read-only catalog lookup, a validation failure, one correction retry, and distinct successful/failed outcomes. Its provider is a labeled deterministic stand-in, not a language model. No network or credentials are required.
 

@@ -128,6 +128,7 @@ Qualify the alpha with unfamiliar developers, improve keyboard/screen-reader usa
 
 - [Architecture](docs/architecture.md), [event contract](docs/contract.md), and [JSON Schema](schema/event.schema.json).
 - [Engineering review](docs/engineering-review.md): confirmed findings, fixes, and deferred work.
+- [macOS startup investigation](docs/macos-startup.md): a resolver stall found during remote release qualification.
 - [Dependencies and supported environments](docs/dependencies.md).
 - [Privacy boundaries](docs/privacy.md), [security reporting](SECURITY.md), and [contributing](CONTRIBUTING.md).
 - [Release preparation](docs/release-checklist.md), [alpha release notes](docs/release-notes-v0.1.0-alpha.1.md), [publication instructions](docs/publication.md), and [change log](CHANGELOG.md).

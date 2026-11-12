@@ -86,7 +86,9 @@ def test_failure_stack_retains_location_without_machine_path():
     with running_child(f"exec(compile({blocked!r}, '/private/synthetic-host/socket.py', 'exec'))") as (process, output):
         assert output.wait(lambda: b"READY" in output.data["stderr"], 10) == "ready"
         process.send_signal(signal.SIGUSR1)
-        assert output.wait(lambda: b"socket.py" in output.data["stderr"], 10) == "ready"
+        # Faulthandler writes a frame in chunks; a filename alone is not a frame.
+        assert output.wait(lambda: "frame socket.py:4 in blocked_startup" in
+                           output.summary()["stderr"]["safe_text"], 10) == "ready"
         text = output.summary()["stderr"]["safe_text"]
     assert "frame socket.py:4 in blocked_startup" in text
     assert "/private" not in text and "synthetic-host" not in text

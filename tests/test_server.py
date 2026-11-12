@@ -1,4 +1,5 @@
 from http.client import HTTPConnection
+import socket
 from threading import Thread
 
 import pytest
@@ -64,3 +65,25 @@ def test_host_rebinding_and_write_requests_rejected(server):
 def test_assets_missing_is_clear(tmp_path):
     with pytest.raises(ValueError, match="assets are missing"):
         make_server(asset_root=tmp_path)
+
+
+def test_loopback_startup_does_not_resolve_hostnames(tmp_path, monkeypatch):
+    def forbidden_lookup(*_args, **_kwargs):
+        raise AssertionError("Loopback viewer must not resolve a hostname")
+
+    monkeypatch.setattr(socket, "getfqdn", forbidden_lookup)
+    monkeypatch.setattr(socket, "gethostbyaddr", forbidden_lookup)
+    (tmp_path / "index.html").write_text("<!doctype html><title>Offline viewer</title>")
+    server = make_server(0, asset_root=tmp_path)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert server.server_address[0] == "127.0.0.1"
+        assert server.server_name == "localhost"
+        assert server.server_port == server.server_address[1] > 0
+        status, _, body = request(server, "/")
+        assert status == 200 and b"Offline viewer" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
