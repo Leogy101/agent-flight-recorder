@@ -6,7 +6,7 @@
 
 Capture explicitly instrumented operations into a portable JSONL file. Inspect model and tool boundaries, timing, retries, failures, and missing evidence in a local timeline. Step through recorded events without executing them again.
 
-Standalone and framework-agnostic. No account, database, collector, model credentials, or Python runtime dependencies. The viewer is bundled with the package. Release candidate: **v0.1.0-alpha.1** (Python package version `0.1.0a1`). This is alpha software for local debugging. Public GitHub publication is pending approval; there is no PyPI release.
+Standalone and framework-agnostic. No account, database, collector, model credentials, or Python runtime dependencies. The viewer is bundled with the package. Alpha version: **v0.1.0-alpha.1** (Python package version `0.1.0a1`). This is alpha software for local debugging. See [GitHub Releases](https://github.com/Leogy101/agent-flight-recorder/releases) for release assets; there is no PyPI release.
 
 ![An executed local agent fails after correcting its tool arguments; the viewer shows the failed operation and captured input](docs/screenshots/executed-failure.png)
 
@@ -20,7 +20,7 @@ Standalone and framework-agnostic. No account, database, collector, model creden
 
 ## Five-minute quickstart
 
-With **Python 3.11–3.14** installed (macOS or Linux), clone the release and enter its directory. This public clone command becomes available only after the alpha is published; until then, use the prepared local checkout.
+With **Python 3.11–3.14** installed (macOS or Linux), clone the alpha tag and enter its directory:
 
 ```sh
 git clone --branch v0.1.0-alpha.1 --depth 1 https://github.com/Leogy101/agent-flight-recorder.git
@@ -118,7 +118,7 @@ python benchmarks/capture.py --output work/capture-benchmark.json
 python -m build
 ```
 
-CI tests Python on macOS/Linux, checks the installed wheel, and runs viewer unit tests and real Chromium acceptance. Its remote execution is still pending publication. Actual local test counts, performance measurements, and tested platforms are recorded in [validation](docs/validation.md), not inferred from configuration.
+The CI workflow tests Python on macOS/Linux, checks the installed wheel, and runs viewer unit tests and real Chromium acceptance. Check [GitHub Actions](https://github.com/Leogy101/agent-flight-recorder/actions) for results on the commit you use. The [prepublication local qualification snapshot](docs/validation.md) records measured test counts, performance, and tested platforms; it does not establish remote CI status.
 
 ## Near-term roadmap
 

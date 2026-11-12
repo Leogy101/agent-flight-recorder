@@ -1,8 +1,10 @@
-# Alpha release qualification
+# Prepublication local qualification snapshot
 
-Verified November 12, 2026 for `v0.1.0-alpha.1` (`0.1.0a1` in Python). The implementation was qualified at local commit `e2474d6` using a **new local Git clone, a new Python virtual environment, and a fresh npm installation**. Subsequent release-evidence documentation does not change runtime code or generated assets. Final artifacts must match the final preparation commit and pass the release artifact checks.
+Verified locally on November 12, 2026 for `v0.1.0-alpha.1` (`0.1.0a1` in Python). The implementation was qualified at local commit `a80fcb3` using a **new local Git clone, a new Python virtual environment, and a fresh npm installation**. Subsequent release-evidence documentation does not change runtime code or generated assets. Final artifacts must match the final preparation commit and pass the release artifact checks.
 
-No repository, tag, release, or package has been published. **Remote GitHub Actions has not run.** The public HTTPS clone/tag cannot be verified until the approved repository and tag exist; the equivalent local clone/install path was executed successfully. Local tests do not substitute for remote CI.
+This is a historical snapshot taken before public repository, tag, or release publication. Remote GitHub Actions and public HTTPS clone/tag access were not exercised in this snapshot; the equivalent local clone/install path passed. Check [GitHub Actions](https://github.com/Leogy101/agent-flight-recorder/actions) for current commit-specific results and the [alpha release record](https://github.com/Leogy101/agent-flight-recorder/releases/tag/v0.1.0-alpha.1) for remote publication checks. Local tests do not substitute for remote CI.
+
+Before publication, an authorized identity-only rewrite replaced author and committer email addresses in four commits with a GitHub noreply address. File trees, names, dates, and commit messages were preserved exactly; commit references in these documents use the replacement hashes. The private backup is not a release artifact.
 
 ## Executed checks
 
@@ -20,14 +22,14 @@ No repository, tag, release, or package has been published. **Remote GitHub Acti
 | Dependency checks | `pip check` passed in each Python test environment. Full npm audit and fresh Python environment advisory audit reported no known vulnerabilities in auditable packages |
 | Media review | Current alpha screenshots and eight sampled frames from the 22.72 s, no-audio demo show synthetic data; desktop version label and narrow layout fit |
 
-The wheel smoke script rejects editable source imports so a development environment cannot conceal missing package files. It was initially invoked in the existing editable environment, correctly failed that guard, and was then run successfully in the separate installed-alpha environment. No product failure was suppressed. Remote CI is still pending rather than reported as passed.
+The wheel smoke script rejects editable source imports so a development environment cannot conceal missing package files. It was initially invoked in the existing editable environment, correctly failed that guard, and was then run successfully in the separate installed-alpha environment. No product failure was suppressed. This local snapshot makes no claim that remote CI passed.
 
 ## Developer-experience qualification
 
 The README installation sequence was followed in the fresh local clone: create `.venv`, upgrade pip, install the checkout, run the example with selected content, and validate both outputs. The installed CLI reports `0.1.0-alpha.1`.
 
-1. **Clone and install:** a new clone of the local candidate contains no inherited virtual environment or node_modules. Source installation completed successfully. The future GitHub HTTPS clone/tag remains an external gate.
-2. **Python versions:** the exact four interpreter/platform combinations above ran the complete Python suite. CI continues to cover minimum/latest versions on macOS/Linux; intermediate versions were additionally checked locally on Linux.
+1. **Clone and install:** a new clone of the local candidate contains no inherited virtual environment or node_modules. Source installation completed successfully. Public GitHub HTTPS clone/tag access was outside this local snapshot.
+2. **Python versions:** the exact four interpreter/platform combinations above ran the complete Python suite. CI is configured for minimum/latest versions on macOS/Linux; intermediate versions were additionally checked locally on Linux.
 3. **Dependencies:** Python runtime requirements remain empty. Build/development downloads are separate from runtime; npm uses its committed lockfile.
 4. **Offline agent:** actual local validation, catalog lookup, correction retry, and answer/error behavior ran. The synthetic success capture has 15 events; failure has 13. Both validate with zero evidence warnings because an observed application failure is not recorder failure.
 5. **Recording and inspection:** browser acceptance opens freshly executed captures, displays arguments/error categories, and distinguishes recovered success from failed root outcome.
@@ -51,7 +53,7 @@ Apple M4 Pro (Mac16,11), 64 GiB RAM, macOS 26.3.1 arm64. Capture: Python 3.14.6.
 | Search/filter update | **6 ms** |
 | Browser-reported used JavaScript heap | **47,400,000 bytes (~47.4 MB)** at the end of acceptance; not peak or total process memory |
 
-Capture measurements include IDs, filtering, context, and two synchronous flushed writes, but not application work. Browser measurements include test-driver overhead. These are synthetic single-machine measurements; slow disks, maximum-content payloads, real model latency, production throughput, and fsync durability are not represented. The prior Phase 2 reference (commit `7f62798`) measured 20.250 μs median / 24.666 μs p95 capture and 356 ms / 6 ms browser import/filter; small variation is expected.
+Capture measurements include IDs, filtering, context, and two synchronous flushed writes, but not application work. Browser measurements include test-driver overhead. These are synthetic single-machine measurements; slow disks, maximum-content payloads, real model latency, production throughput, and fsync durability are not represented. The prior Phase 2 reference (commit `bf2d61b`) measured 20.250 μs median / 24.666 μs p95 capture and 356 ms / 6 ms browser import/filter; small variation is expected.
 
 ## Reproduce local checks
 
@@ -81,8 +83,8 @@ The browser script starts/stops its own server, writes `work/browser/report.json
 
 [Publication instructions](publication.md) build release files from a separate clean clone, verify exact package contents, and calculate hashes. They do not promise bit-identical builds with arbitrary range-selected Python build tools. Actual build/test versions and hashes accompany the locally prepared release evidence.
 
-## Remaining external and human checks
+## External release checks and remaining human checks
 
-After explicit approval: verify public clone/tag access, private vulnerability reporting, the five-job GitHub Actions matrix for the exact commit, and release download checksums. CI is configured, not remotely passed.
+The publication process separately verifies public clone/tag access, private vulnerability reporting, the five-job GitHub Actions matrix for the exact commit, and release download checksums. Those remote results belong in the release record, not this prepublication local snapshot.
 
 First-time-user completion time, screen-reader usability, Windows, Firefox/Safari, production/slow-disk behavior, and distributed processes remain unverified. The provider is a deterministic simulation, not a live LLM. This release supports recorded playback only. See [release gates](release-checklist.md), [security review](release-security-review.md), and [limitations](release-notes-v0.1.0-alpha.1.md).

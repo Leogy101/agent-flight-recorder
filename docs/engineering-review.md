@@ -1,6 +1,6 @@
 # Phase 2 engineering review
 
-Reviewed November 12, 2026 against the existing MVP, beginning at local commit `d4641b0`. The review covered all Python modules, the format/schema, frontend model and UI, CLI/server, examples, fixtures, tests, build configuration, dependencies, and documentation. Core and viewer code were reviewed by reviewers other than their original implementers, with an additional cross-component review. This is an engineering review with reproducible tests, not an independent security certification.
+Reviewed November 12, 2026 against the existing MVP, beginning at local commit `89d7f4b`. The review covered all Python modules, the format/schema, frontend model and UI, CLI/server, examples, fixtures, tests, build configuration, dependencies, and documentation. Core and viewer code were reviewed by reviewers other than their original implementers, with an additional cross-component review. This is an engineering review with reproducible tests, not an independent security certification.
 
 ## Classification
 

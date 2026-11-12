@@ -14,11 +14,11 @@ The prepared release is an alpha of the existing independent project. Python pac
 
 ## Approval and external gates
 
-No public repository, push, external tag, or release is authorized by preparation alone. Present the candidate, security findings, public commit identity, exact destination `Leogy101/agent-flight-recorder`, and artifact hashes for explicit approval.
+Publication to the public `Leogy101/agent-flight-recorder` repository and its alpha prerelease is approved, subject to the final checks below. Preparation alone does not establish that those checks passed.
 
-After approval, follow [the publication runbook](publication.md). Create the approved public repository, enable and verify private vulnerability reporting, then push the reviewed commit. GitHub Actions must actually complete successfully for that exact commit before the tag/release gate. A configuration file or local test pass is not a remote CI result. Publish the annotated `v0.1.0-alpha.1` tag and a prerelease with the reviewed files, then verify published metadata and downloaded checksums.
+Follow [the publication runbook](publication.md). Create the approved public repository, enable and verify private vulnerability reporting, then push the reviewed commit. GitHub Actions must actually complete successfully for that exact commit before the tag/release gate. A configuration file or local test pass is not a remote CI result. Publish the annotated `v0.1.0-alpha.1` tag and a prerelease with the reviewed files, then verify published metadata and downloaded checksums.
 
-No PyPI publishing is part of this request. No live OpenClaw credential access, GlauxOS inspection, credential changes, destructive Git operation, or history rewrite is part of preparation or the publication runbook.
+No PyPI publishing, live OpenClaw credential access, GlauxOS inspection, or credential changes are part of this release. The authorized identity-only history rewrite is documented in [validation](validation.md); no further history rewrite is part of the publication runbook.
 
 ## Remaining alpha limitations
 

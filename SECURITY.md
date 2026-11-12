@@ -2,15 +2,15 @@
 
 ## Supported release
 
-`v0.1.0-alpha.1` (`0.1.0a1` in Python packaging) is the current alpha release candidate. Only this candidate is being qualified; no stable support or production security certification is promised. Public repository/release publication is pending approval.
+This policy covers the `v0.1.0-alpha.1` alpha (`0.1.0a1` in Python packaging). No stable support or production security certification is promised. See [GitHub Releases](https://github.com/Leogy101/agent-flight-recorder/releases) for release availability and associated verification results.
 
 ## Report a vulnerability
 
-After the repository is public and private reporting has been enabled, use GitHub's **Security → Report a vulnerability** on `Leogy101/agent-flight-recorder`. The direct destination will be `https://github.com/Leogy101/agent-flight-recorder/security/advisories/new`. Its availability must be verified during publication; it is not claimed to be enabled now.
+Use GitHub's **Security → Report a vulnerability** on `Leogy101/agent-flight-recorder` when available: [submit a private report](https://github.com/Leogy101/agent-flight-recorder/security/advisories/new).
 
 If that private-reporting option is unavailable, do not disclose exploit details, credentials, personal data, or real recordings in public issues. Wait for an available private channel. No email address is invented as a fallback.
 
-Include the affected release, impact, reproduction steps, and a minimal **synthetic** example. Share only the data needed to explain the issue. Do not attach actual customer captures. Ordinary non-sensitive bug reports may use public issues once the repository exists.
+Include the affected release, impact, reproduction steps, and a minimal **synthetic** example. Share only the data needed to explain the issue. Do not attach actual customer captures. Ordinary non-sensitive bug reports may use [public issues](https://github.com/Leogy101/agent-flight-recorder/issues).
 
 ## Security boundaries
 

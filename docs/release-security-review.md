@@ -22,7 +22,7 @@ This review ran while release preparation was in progress. Its snapshot and exis
 
 The supplemental scan observed one fewer tracked file than the earlier stable copy because release preparation was editing the checkout. It does not replace the final candidate scan. Twenty-six local symlinks were deliberately not followed. No regular file exceeded the supplemental scanner's 64 MiB per-file bound.
 
-The review stayed within this repository and its existing package artifacts. It did not inspect external credential stores, live OpenClaw configuration or credentials, GlauxOS paths or configuration, or configuration referenced outside the repository. Repository-local `.git/config` was checked for credential patterns without printing its values. Normal Git author and committer identity metadata remains in history; it was counted, not rewritten or reproduced in this report.
+The review stayed within this repository and its existing package artifacts. It did not inspect external credential stores, live OpenClaw configuration or credentials, GlauxOS paths or configuration, or configuration referenced outside the repository. Repository-local `.git/config` was checked for credential patterns without printing its values. At this baseline, Git author and committer identity metadata was counted, not rewritten or reproduced in this report. The later authorized identity-only rewrite is documented in [validation](validation.md).
 
 ## Methods and results
 
@@ -48,10 +48,10 @@ Pattern scanners can miss novel, encoded, encrypted, fragmented, or context-depe
 
 Sanitized detailed evidence and tool verification are retained in ignored `work/phase3/`. That working directory, local environments, and logs must not be attached to a release.
 
-Before publication, rerun the tracked-file, complete reachable-history, and expanded-archive scans against the final preparation commit and freshly built wheel/source archive. Record their commit, file/member counts, and results here or in the release checklist. Publication and any author-identity decision remain the user's choice.
+Before publication, rerun the tracked-file, complete reachable-history, and expanded-archive scans against the final preparation commit and freshly built wheel/source archive. Record their commit, file/member counts, and results here or in the release checklist. The authorized publication still requires these final checks.
 
 ## Alpha qualification and final artifact evidence
 
-The candidate implementation was qualified at `e2474d6`. Updated screenshots display the alpha version; the desktop and narrow layouts were reviewed visually. Eight representative frames across the regenerated 22.72-second silent demonstration show only the committed synthetic workflow and redacted output. This is a sampled visual review, not exhaustive OCR or inspection of every frame.
+The candidate implementation was qualified at `a80fcb3`. Updated screenshots display the alpha version; the desktop and narrow layouts were reviewed visually. Eight representative frames across the regenerated 22.72-second silent demonstration show only the committed synthetic workflow and redacted output. This is a sampled visual review, not exhaustive OCR or inspection of every frame.
 
-Release preparation retains the verified scanner and generates the final commit/file/member counts and SHA-256 artifact manifest outside the repository. This avoids embedding a file's own final commit/hash in itself. The publication approval report must include that final scan result for the exact attached wheel, source distribution, and source ZIP; the baseline counts above are not silently presented as final-candidate counts. Do not attach ignored scan snapshots, virtual environments, logs, or credential stores.
+Release preparation retains the verified scanner and generates the final commit/file/member counts and SHA-256 artifact manifest outside the repository. This avoids embedding a file's own final commit/hash in itself. The publication record must include that final scan result for the exact attached wheel, source distribution, and source ZIP; the baseline counts above are not silently presented as final-candidate counts. Do not attach ignored scan snapshots, virtual environments, logs, or credential stores.

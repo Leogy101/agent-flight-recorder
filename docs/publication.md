@@ -154,9 +154,32 @@ test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$AFR_COMMIT"
 
 The remote branch must still equal `AFR_COMMIT`. Retain the successful run URL with the release evidence. If CI changes the source, rebuild and review assets from the resulting commit, push it, and repeat this gate.
 
+## Verify public clone and clean installation
+
+After the main-branch CI gate passes, verify the public HTTPS checkout in a new temporary directory. These clone options disable interactive and credential-helper authentication and clear extra HTTP headers. Use a fresh, non-editable installation with `PYTHONPATH` unset, then execute the synthetic example and installed-package smoke check:
+
+```sh
+AFR_PUBLIC_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/afr-public-check.XXXXXX")"
+GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c http.extraHeader= \
+  clone --branch main --depth 1 "https://github.com/$AFR_REPO.git" "$AFR_PUBLIC_ROOT/main"
+test "$(git -C "$AFR_PUBLIC_ROOT/main" rev-parse HEAD)" = "$AFR_COMMIT"
+(
+  unset PYTHONPATH
+  python3 -m venv "$AFR_PUBLIC_ROOT/venv"
+  "$AFR_PUBLIC_ROOT/venv/bin/python" -m pip install --upgrade 'pip>=26.2'
+  cd "$AFR_PUBLIC_ROOT/main"
+  "$AFR_PUBLIC_ROOT/venv/bin/python" -m pip install .
+  "$AFR_PUBLIC_ROOT/venv/bin/python" examples/record_agent.py \
+    --output-dir "$AFR_PUBLIC_ROOT/recordings" --capture-content
+  "$AFR_PUBLIC_ROOT/venv/bin/python" tests/installed_smoke.py
+)
+```
+
+Record these results with the release evidence. A failed public clone, commit check, installation, or smoke check blocks the tag/release gate.
+
 ## Tag and publish the reviewed prerelease
 
-Proceed only if approval covers this release and the remote CI gate passed. Confirm the tag does not already exist locally or remotely. Never force an existing tag. Create an annotated tag at the verified commit, then verify the remote tag's peeled commit equals it:
+Proceed only if approval covers this release and the remote CI and public-clone/install gates passed. Confirm the tag does not already exist locally or remotely. Never force an existing tag. Create an annotated tag at the verified commit, then verify the remote tag's peeled commit equals it:
 
 ```sh
 AFR_EXISTING_LOCAL_TAG="$(git tag --list "$AFR_TAG")"
@@ -186,6 +209,15 @@ test "$(gh run view "$AFR_TAG_RUN_ID" --repo "$AFR_REPO" --json headSha --jq .he
 test "$(gh run view "$AFR_TAG_RUN_ID" --repo "$AFR_REPO" \
   --json status,conclusion,jobs \
   --jq '.status == "completed" and .conclusion == "success" and (.jobs | length) == 5 and all(.jobs[]; .status == "completed" and .conclusion == "success")')" = true
+```
+
+Before creating the prerelease, verify that a fresh public checkout of the alpha tag resolves to the exact reviewed commit:
+
+```sh
+AFR_TAG_CHECK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/afr-public-tag.XXXXXX")"
+GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c http.extraHeader= \
+  clone --branch "$AFR_TAG" --depth 1 "https://github.com/$AFR_REPO.git" "$AFR_TAG_CHECK_ROOT/source"
+test "$(git -C "$AFR_TAG_CHECK_ROOT/source" rev-parse HEAD)" = "$AFR_COMMIT"
 ```
 
 Recheck the four approved asset hashes. Attach explicit filenames so earlier `0.1.0` packages cannot be included accidentally. `--verify-tag` prevents automatic tag creation, and the release is explicitly a prerelease without the Latest label. [Release command behavior](https://cli.github.com/manual/gh_release_create)

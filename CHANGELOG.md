@@ -1,6 +1,6 @@
 # Change log
 
-## v0.1.0-alpha.1 — release candidate, 2026-11-12
+## v0.1.0-alpha.1 — 2026-11-12
 
 - Added an executing, dependency-free support-agent example with a clearly identified simulated provider, real local read-only lookup, argument-correction retry, and success/failure recordings.
 - Fixed overlapping literal redaction and transformed-key collisions, preserving privacy and payload meaning.
@@ -12,4 +12,4 @@
 
 Release preparation aligns Python metadata at `0.1.0a1` and frontend/GitHub naming at `0.1.0-alpha.1`, adds Vite helper attribution, strengthens private-config exclusions, and qualifies clean installation, OTLP import, privacy-safe export, and viewer shutdown/restart. Existing schema and historical fixture versions remain unchanged.
 
-No public release, tag publication, package upload, or GitHub push has occurred. This heading names the prepared candidate; it does not claim external publication.
+See the [GitHub release record](https://github.com/Leogy101/agent-flight-recorder/releases/tag/v0.1.0-alpha.1) for publication status, attached assets, and remote verification. No package-registry upload is part of this alpha.
