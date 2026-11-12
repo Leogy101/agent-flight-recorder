@@ -2,7 +2,7 @@
 
 ## Runtime
 
-- Python 3.11–3.14 is the intended supported range for this alpha. Package metadata permits Python >=3.11; that is not a claim that future versions have been tested.
+- CPython 3.11–3.14 is the intended supported range for this alpha; the complete suite ran on all four minor versions in the documented environments. Package metadata permits Python >=3.11; that is not a claim that future versions have been tested.
 - The recorder, reader, converter, command line, and static server use only the Python standard library. There are **zero third-party Python runtime dependencies**.
 - The installed package includes its browser bundle. Node, npm, a database, OpenTelemetry SDKs, provider SDKs, and API keys are not needed to record or view files.
 - React, React DOM, their transitive Scheduler code, and Vite's module-preload helper are bundled in the viewer with MIT notices. The project itself uses MIT. Build/test packages are not shipped as installed dependencies. There are no CDN assets, analytics, remote fonts, or background services.

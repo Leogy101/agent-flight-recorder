@@ -98,7 +98,7 @@ OTLP imports reconstruct lifecycle records from exported spans. They cannot reco
 
 Your application invokes the model/tool → explicit Python scopes filter and append events → a browser file picker opens the recording → an in-memory timeline displays saved evidence. The local server serves static assets only. There is no data ingestion API. See [architecture](docs/architecture.md) and [the event contract](docs/contract.md).
 
-Default bounds are 25 MiB per recording, 10,000 events, 64 KiB per event, and 8 KiB per opted-in payload. The Phase 2 reference measurement on an Apple M4 Pro opened 10,000 events (3.95 MB) in 356 ms, filtered in 6 ms, and recorded empty tool scopes at 20.25 μs median / 24.67 μs p95. These are synthetic observations, not production guarantees. [Validation](docs/validation.md) records release-candidate measurements, exact environments, and reproduction commands.
+Default bounds are 25 MiB per recording, 10,000 events, 64 KiB per event, and 8 KiB per opted-in payload. The alpha qualification on an Apple M4 Pro opened 10,000 events (3.95 MB) in 359 ms, filtered in 6 ms, and recorded empty tool scopes at 21.625 μs median / 26.833 μs p95. These are synthetic observations, not production guarantees. [Validation](docs/validation.md) records release-candidate measurements, exact environments, and reproduction commands.
 
 ## Develop and verify
 
